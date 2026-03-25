@@ -1,0 +1,27 @@
+{
+	"name": "@codeteleport/mcp",
+	"version": "0.1.0",
+	"description": "Teleport Claude Code sessions between machines",
+	"bin": {
+		"codeteleport": "./dist/cli/index.js",
+		"codeteleport-mcp": "./dist/mcp/index.js"
+	},
+	"main": "./dist/index.js",
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1",
+		"commander": "^12",
+		"tar": "^7",
+		"open": "^10"
+	},
+	"devDependencies": {
+		"@types/node": "^20",
+		"typescript": "^5.5",
+		"vitest": "^2"
+	}
+}
