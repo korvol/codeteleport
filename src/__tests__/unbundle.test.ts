@@ -140,6 +140,53 @@ describe("unbundleSession", () => {
 		expect(fs.existsSync(ss)).toBe(true);
 	});
 
+	it("uses targetDir for two-pass rewrite (different user + different project path)", async () => {
+		// Source: /Users/alice/myproject on alice's machine
+		// Target: /Users/bob/work/different-project on bob's machine
+		// Two-pass: /Users/alice → /Users/bob, then /Users/bob/myproject → /Users/bob/work/different-project
+
+		const targetDir = "/Users/bob/work/different-project";
+		const bobClaude = path.join(tmpDir, "bob-home", ".claude");
+
+		const result = await unbundleSession({
+			bundlePath,
+			targetDir,
+			claudeDir: bobClaude,
+		});
+
+		expect(result.sessionId).toBe(sessionId);
+
+		// The project dir should be encoded from targetDir, not from the source cwd
+		const expectedEncoded = targetDir.replace(/\//g, "-");
+		const jsonlPath = path.join(bobClaude, "projects", expectedEncoded, `${sessionId}.jsonl`);
+		expect(fs.existsSync(jsonlPath)).toBe(true);
+
+		// Paths should be fully rewritten to target
+		const content = fs.readFileSync(jsonlPath, "utf-8");
+		expect(content).not.toContain("/Users/alice");
+		expect(content).toContain("/Users/bob/work/different-project");
+	});
+
+	it("targetDir auto-detects home dir and derives claudeDir", async () => {
+		// Use targetDir with explicit claudeDir to test the home detection logic
+		const targetDir = "/Users/bob/projects/anchored-here";
+		const bobClaude = path.join(tmpDir, "bob-claude");
+
+		const result = await unbundleSession({
+			bundlePath,
+			targetDir,
+			claudeDir: bobClaude,
+		});
+
+		expect(result.sessionId).toBe(sessionId);
+		expect(result.resumeCommand).toBe(`claude --resume ${sessionId}`);
+
+		// Session should be anchored at targetDir path
+		const expectedEncoded = targetDir.replace(/\//g, "-");
+		const jsonlPath = path.join(bobClaude, "projects", expectedEncoded, `${sessionId}.jsonl`);
+		expect(fs.existsSync(jsonlPath)).toBe(true);
+	});
+
 	it("throws for invalid bundle (missing meta.json)", async () => {
 		// Create a bundle without meta.json
 		const badStaging = path.join(tmpDir, "bad-staging");

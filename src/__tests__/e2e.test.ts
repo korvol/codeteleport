@@ -320,4 +320,78 @@ describe("E2E: Full teleport flow with mock server", () => {
 		// Clean up downloaded bundle
 		fs.unlinkSync(downloadPath);
 	});
+
+	it("full teleport with targetDir: different user AND different project path", async () => {
+		// ══════════════════════════════════════════════
+		// MACHINE A: Bundle
+		// ══════════════════════════════════════════════
+
+		const bundle = await bundleSession({
+			sessionId,
+			cwd: sourceCwd,
+			outputDir: tmpRoot,
+			claudeDir: machineA.claude,
+			sourceUserDir,
+		});
+
+		// "Upload" to mock server
+		const bundleData = fs.readFileSync(bundle.bundlePath);
+		serverStorage.set(sessionId, bundleData);
+		fs.unlinkSync(bundle.bundlePath);
+
+		// ══════════════════════════════════════════════
+		// MACHINE B: Pull with targetDir
+		// Source: /Users/alice/projects/code-teleport
+		// Target: /Users/bob/work/my-teleport (different user + different path)
+		// ══════════════════════════════════════════════
+
+		const targetDir = `${machineB.home}/work/my-teleport`;
+		const downloadedBundle = serverStorage.get(sessionId) as Buffer;
+		const downloadPath = path.join(tmpRoot, `downloaded2-${sessionId}.tar.gz`);
+		fs.writeFileSync(downloadPath, downloadedBundle);
+
+		const result = await unbundleSession({
+			bundlePath: downloadPath,
+			targetDir,
+			claudeDir: machineB.claude,
+		});
+
+		expect(result.sessionId).toBe(sessionId);
+
+		// Project dir should be encoded from targetDir
+		const targetEncodedCwd = encodePath(targetDir);
+		const targetProjDir = path.join(machineB.claude, "projects", targetEncodedCwd);
+		const jsonlPath = path.join(targetProjDir, `${sessionId}.jsonl`);
+		expect(fs.existsSync(jsonlPath)).toBe(true);
+
+		// Two-pass verification:
+		// 1. No /Users/alice paths remain
+		// 2. All paths point to the targetDir
+		const jsonlContent = fs.readFileSync(jsonlPath, "utf-8");
+		expect(jsonlContent).not.toContain("/Users/alice");
+		expect(jsonlContent).toContain(`${machineB.home}/work/my-teleport`);
+
+		// Verify a tool call path was fully rewritten
+		const lines = jsonlContent.trim().split("\n");
+		const editMsg = JSON.parse(lines[1]);
+		expect(editMsg.toolCalls[0].input.file_path).toBe(`${machineB.home}/work/my-teleport/packages/api/src/index.ts`);
+
+		// CWD should point to targetDir, not the original
+		const firstMsg = JSON.parse(lines[0]);
+		expect(firstMsg.cwd).toBe(`${machineB.home}/work/my-teleport`);
+
+		// Subagent should also be rewritten
+		const subagentPath = path.join(targetProjDir, sessionId, "subagents", "explore-001.jsonl");
+		expect(fs.existsSync(subagentPath)).toBe(true);
+		const subContent = fs.readFileSync(subagentPath, "utf-8");
+		expect(subContent).not.toContain("/Users/alice");
+		expect(subContent).toContain(`${machineB.home}/work/my-teleport`);
+
+		// Assets still installed correctly
+		expect(fs.existsSync(path.join(machineB.claude, "file-history", sessionId))).toBe(true);
+		expect(fs.existsSync(path.join(machineB.claude, "paste-cache", "aabb1122.txt"))).toBe(true);
+		expect(fs.existsSync(path.join(machineB.claude, "shell-snapshots", "snapshot-zsh-99999-e2eab.sh"))).toBe(true);
+
+		fs.unlinkSync(downloadPath);
+	});
 });

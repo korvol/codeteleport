@@ -13,3 +13,22 @@ export function encodePath(fsPath: string): string {
 export function rewritePaths(content: string, sourceUserDir: string, targetUserDir: string): string {
 	return content.split(sourceUserDir).join(targetUserDir);
 }
+
+/**
+ * Auto-detect the user home directory from a full path.
+ * /Users/alice/foo/bar → /Users/alice
+ * /home/alice/foo/bar  → /home/alice
+ * /root/foo/bar        → /root
+ */
+export function detectHomeDir(fullPath: string): string {
+	const macosMatch = fullPath.match(/^(\/Users\/[^/]+)/);
+	if (macosMatch) return macosMatch[1];
+
+	const linuxMatch = fullPath.match(/^(\/home\/[^/]+)/);
+	if (linuxMatch) return linuxMatch[1];
+
+	const rootMatch = fullPath.match(/^(\/root)/);
+	if (rootMatch) return rootMatch[1];
+
+	throw new Error(`could not auto-detect home dir from: ${fullPath}`);
+}

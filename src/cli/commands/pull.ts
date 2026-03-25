@@ -9,6 +9,7 @@ import { readConfig } from "../config";
 export const pullCommand = new Command("pull")
 	.description("Pull a session from CodeTeleport to this machine")
 	.option("--session-id <id>", "Pull a specific session")
+	.option("--target-dir <path>", "Anchor session at this directory (e.g. /Users/bob/projects/myapp)")
 	.option("--machine <name>", "Filter by source machine")
 	.action(async (opts) => {
 		const config = readConfig();
@@ -55,7 +56,10 @@ export const pullCommand = new Command("pull")
 
 			// Unbundle
 			console.log("Installing...");
-			const result = await unbundleSession({ bundlePath: tmpFile });
+			const result = await unbundleSession({
+				bundlePath: tmpFile,
+				targetDir: opts.targetDir,
+			});
 
 			console.log("");
 			console.log("Session installed");

@@ -12,6 +12,7 @@ interface ToolArgs {
 	label?: string;
 	tags?: string[];
 	sessionId?: string;
+	targetDir?: string;
 	machine?: string;
 	tag?: string;
 	limit?: number;
@@ -20,7 +21,18 @@ interface ToolArgs {
 export function registerTools(server: McpServer) {
 	server.registerTool(
 		"teleport_push",
-		{ description: "Push the current Claude Code session to CodeTeleport cloud" },
+		{
+			description: [
+				"Push the current Claude Code session to CodeTeleport cloud storage.",
+				"Bundles the full conversation (JSONL, subagents, file history, paste cache, shell snapshots)",
+				"and uploads it so you can resume on another machine.",
+				"",
+				"Examples:",
+				'  "teleport this session"',
+				'  "push this session to the cloud"',
+				'  "save this conversation so I can continue on my MacBook"',
+			].join("\n"),
+		},
 		async () => {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
@@ -64,7 +76,22 @@ export function registerTools(server: McpServer) {
 
 	server.registerTool(
 		"teleport_pull",
-		{ description: "Pull a session from CodeTeleport cloud to this machine" },
+		{
+			description: [
+				"Pull a session from CodeTeleport cloud to this machine.",
+				"Downloads the bundle, rewrites all internal paths for this machine's username,",
+				"and installs it so you can resume with `claude --resume <id>`.",
+				"",
+				"If sessionId is provided, pulls that specific session.",
+				"Otherwise lists available sessions for you to choose from.",
+				"Use targetDir to anchor the session at a specific directory path.",
+				"",
+				"Examples:",
+				'  "pull my session from my MacBook"',
+				'  "pull session abc123 to /Users/bob/projects/myapp"',
+				'  "show me my available sessions"',
+			].join("\n"),
+		},
 		async (args: ToolArgs) => {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
@@ -75,7 +102,7 @@ export function registerTools(server: McpServer) {
 
 				try {
 					await client.downloadBundle(downloadUrl, tmpFile);
-					const result = await unbundleSession({ bundlePath: tmpFile });
+					const result = await unbundleSession({ bundlePath: tmpFile, targetDir: args.targetDir });
 
 					return {
 						content: [
@@ -114,7 +141,18 @@ export function registerTools(server: McpServer) {
 
 	server.registerTool(
 		"teleport_list",
-		{ description: "List all sessions stored in CodeTeleport cloud" },
+		{
+			description: [
+				"List all sessions stored in CodeTeleport cloud.",
+				"Shows session ID, source machine, project path, date, size, message count, and tags.",
+				"Filter by machine name or tag.",
+				"",
+				"Examples:",
+				'  "list my teleported sessions"',
+				'  "show sessions from my MacBook"',
+				'  "what sessions do I have tagged as work?"',
+			].join("\n"),
+		},
 		async (args: ToolArgs) => {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
@@ -146,7 +184,16 @@ export function registerTools(server: McpServer) {
 
 	server.registerTool(
 		"teleport_status",
-		{ description: "Show CodeTeleport account status and sync info" },
+		{
+			description: [
+				"Show CodeTeleport account status and sync info.",
+				"Displays device name, API URL, total sessions stored, and last push time.",
+				"",
+				"Examples:",
+				'  "what\'s my CodeTeleport status?"',
+				'  "how many sessions do I have stored?"',
+			].join("\n"),
+		},
 		async () => {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
@@ -172,7 +219,17 @@ export function registerTools(server: McpServer) {
 
 	server.registerTool(
 		"teleport_delete",
-		{ description: "Delete a session from CodeTeleport cloud" },
+		{
+			description: [
+				"Delete a session from CodeTeleport cloud.",
+				"Permanently removes the session bundle from cloud storage. Cannot be undone.",
+				"Requires the full session ID.",
+				"",
+				"Examples:",
+				'  "delete session c3a05473-9f12-4a2b-ae27-9478ab66d216"',
+				'  "remove my old teleported session"',
+			].join("\n"),
+		},
 		async (args: ToolArgs) => {
 			if (!args.sessionId) {
 				return { content: [{ type: "text" as const, text: "sessionId is required" }], isError: true };

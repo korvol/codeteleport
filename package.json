@@ -2,11 +2,18 @@
 	"name": "@codeteleport/mcp",
 	"version": "0.1.0",
 	"description": "Teleport Claude Code sessions between machines",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/nawaaz-korvol/code-teleport"
+	},
+	"keywords": ["claude", "claude-code", "mcp", "sync", "teleport", "sessions"],
 	"bin": {
 		"codeteleport": "./dist/cli/index.js",
 		"codeteleport-mcp": "./dist/mcp/index.js"
 	},
 	"main": "./dist/index.js",
+	"files": ["dist", "README.md"],
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",

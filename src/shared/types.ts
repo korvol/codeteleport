@@ -30,7 +30,8 @@ export interface UnbundleResult {
 
 export interface UnbundleOptions {
 	bundlePath: string;
-	targetUserDir?: string;
+	targetDir?: string; // full path to anchor the session (e.g. /Users/bob/projects/code-teleport)
+	targetUserDir?: string; // override — auto-detected from targetDir if not provided
 	claudeDir?: string; // override ~/.claude for testing
 }
 

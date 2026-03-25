@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodePath, rewritePaths } from "../core/paths";
+import { detectHomeDir, encodePath, rewritePaths } from "../core/paths";
 
 describe("encodePath", () => {
 	it("replaces slashes with dashes", () => {
@@ -51,5 +51,39 @@ describe("rewritePaths", () => {
 		const content = '{"cwd":"/Users/alice/proj"}';
 		const result = rewritePaths(content, "/Users/alice", "/Users/alice");
 		expect(result).toBe(content);
+	});
+});
+
+describe("detectHomeDir", () => {
+	it("detects macOS home from /Users/alice/projects/foo", () => {
+		expect(detectHomeDir("/Users/alice/projects/foo")).toBe("/Users/alice");
+	});
+
+	it("detects macOS home from /Users/housenumbers", () => {
+		expect(detectHomeDir("/Users/housenumbers")).toBe("/Users/housenumbers");
+	});
+
+	it("detects macOS home from deep nested path", () => {
+		expect(detectHomeDir("/Users/openclaw/code-teleport/packages/mcp")).toBe("/Users/openclaw");
+	});
+
+	it("detects Linux home from /home/user/proj", () => {
+		expect(detectHomeDir("/home/user/proj")).toBe("/home/user");
+	});
+
+	it("detects /root", () => {
+		expect(detectHomeDir("/root/projects/foo")).toBe("/root");
+	});
+
+	it("detects just /root", () => {
+		expect(detectHomeDir("/root")).toBe("/root");
+	});
+
+	it("throws for unrecognized path", () => {
+		expect(() => detectHomeDir("/var/data/project")).toThrow("could not auto-detect home dir");
+	});
+
+	it("throws for empty path", () => {
+		expect(() => detectHomeDir("")).toThrow("could not auto-detect home dir");
 	});
 });

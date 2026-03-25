@@ -2,7 +2,7 @@ import os from "node:os";
 import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
-import { getEnv } from "../../shared/env";
+import { API_URL } from "../../shared/constants";
 import { writeConfig } from "../config";
 
 function prompt(question: string): Promise<string> {
@@ -26,13 +26,10 @@ authCommand
 	.description("Log in to CodeTeleport")
 	.option("--register", "Create a new account")
 	.action(async (opts) => {
-		const env = getEnv();
-		const apiUrl = env.CODETELEPORT_API_URL;
-
 		const email = await prompt("Email: ");
 		const password = await promptPassword("Password: ");
 
-		const client = new CodeTeleportClient({ apiUrl, token: "" });
+		const client = new CodeTeleportClient({ apiUrl: API_URL, token: "" });
 
 		let jwt: string;
 		try {
@@ -51,14 +48,14 @@ authCommand
 
 		// Create a long-lived API token for this device
 		const deviceName = os.hostname().replace(/\.local$/, "");
-		const authedClient = new CodeTeleportClient({ apiUrl, token: jwt });
+		const authedClient = new CodeTeleportClient({ apiUrl: API_URL, token: jwt });
 
 		try {
 			const { token: apiToken } = await authedClient.createApiToken(deviceName);
 
 			writeConfig({
 				token: apiToken,
-				apiUrl,
+				apiUrl: API_URL,
 				deviceName,
 			});
 
