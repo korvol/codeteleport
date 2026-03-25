@@ -19,6 +19,7 @@ export interface BundleOptions {
 	cwd: string;
 	outputDir?: string;
 	claudeDir?: string; // override ~/.claude for testing
+	sourceUserDir?: string; // override os.homedir() for testing
 }
 
 export interface UnbundleResult {

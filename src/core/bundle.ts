@@ -12,7 +12,7 @@ export async function bundleSession(options: BundleOptions): Promise<BundleResul
 	const { sessionId, cwd } = options;
 	const outputDir = options.outputDir ?? os.tmpdir();
 	const claudeDir = options.claudeDir ?? CLAUDE_DIR;
-	const sourceUserDir = os.homedir();
+	const sourceUserDir = options.sourceUserDir ?? os.homedir();
 	const encodedCwd = encodePath(cwd);
 
 	const projDir = path.join(claudeDir, "projects", encodedCwd);
