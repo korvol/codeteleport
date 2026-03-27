@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6 (2026-03-27)
+
+- **Graceful error handling** — MCP tools return `isError: true` instead of crashing, CLI shows clean messages
+- **User info in status** — `codeteleport status` and `teleport_status` show email, plan, sessions/devices usage
+- **GET /v1/auth/me** — new API endpoint returns current user info
+- **teleport_local_list** — new MCP tool scans local sessions from `~/.claude/`
+- **list --local/--cloud** — `codeteleport list` prompts for local vs cloud, `--push` for batch upload
+- **Corrupt config handling** — helpful message instead of JSON parse crash
+
 ## 0.1.5 (2026-03-27)
 
 - **Interactive push** — `codeteleport push` scans current directory for sessions, shows picker if multiple found

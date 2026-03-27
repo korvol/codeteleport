@@ -1,6 +1,6 @@
 {
 	"name": "@codeteleport/mcp",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Teleport Claude Code sessions between machines",
 	"license": "MIT",
 	"repository": {
