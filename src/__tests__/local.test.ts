@@ -26,8 +26,10 @@ describe("Local session scanner", () => {
 		fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.join("\n"));
 	}
 
-	function makeLine(timestamp: string, type = "user") {
-		return JSON.stringify({ timestamp, type, message: { content: "test" } });
+	function makeLine(timestamp: string, type = "user", cwd?: string) {
+		const obj: Record<string, unknown> = { timestamp, type, message: { content: "test" } };
+		if (cwd) obj.cwd = cwd;
+		return JSON.stringify(obj);
 	}
 
 	describe("scanLocalSessions", () => {
@@ -43,7 +45,7 @@ describe("Local session scanner", () => {
 
 		it("finds a single session with correct metadata", () => {
 			const lines = [
-				makeLine("2026-03-25T07:00:00.000Z"),
+				makeLine("2026-03-25T07:00:00.000Z", "user", "/Users/alice/my-project"),
 				makeLine("2026-03-25T07:05:00.000Z", "assistant"),
 				makeLine("2026-03-25T07:10:00.000Z"),
 			];
