@@ -88,6 +88,10 @@ export class CodeTeleportClient {
 		return res.json() as Promise<{ token: string; user: { id: string; email: string } }>;
 	}
 
+	async getMe(): Promise<{ id: string; email: string; plan: string; createdAt: string }> {
+		return this.request("GET", "/auth/me") as Promise<{ id: string; email: string; plan: string; createdAt: string }>;
+	}
+
 	async getUsage(): Promise<{
 		plan: string;
 		paymentStatus: string | null;

@@ -14,6 +14,7 @@ export const statusCommand = new Command("status")
 		const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
 		try {
+			const me = await client.getMe();
 			const usage = await client.getUsage();
 			const { sessions } = await client.listSessions({ limit: 1 });
 
@@ -21,6 +22,7 @@ export const statusCommand = new Command("status")
 				limit === null ? `${used} (unlimited)` : `${used} / ${limit}`;
 
 			console.log("CodeTeleport Status");
+			console.log(`  user     : ${me.email}`);
 			console.log(`  device   : ${config.deviceName}`);
 			console.log(`  api      : ${config.apiUrl}`);
 			console.log(`  plan     : ${usage.plan}`);

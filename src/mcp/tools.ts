@@ -239,6 +239,7 @@ export function registerTools(server: McpServer) {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
+			const me = await client.getMe();
 			const usage = await client.getUsage();
 			const { sessions } = await client.listSessions({ limit: 1 });
 
@@ -247,6 +248,7 @@ export function registerTools(server: McpServer) {
 
 			const lines = [
 				"CodeTeleport Status",
+				`  user     : ${me.email}`,
 				`  device   : ${config.deviceName}`,
 				`  api      : ${config.apiUrl}`,
 				`  plan     : ${usage.plan}`,
