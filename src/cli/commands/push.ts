@@ -1,8 +1,21 @@
+import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
 import { bundleSession } from "../../core/bundle";
-import { detectCurrentSession, listLocalSessions } from "../../core/session";
+import { scanProjectSessions } from "../../core/local";
+import { detectCurrentSession } from "../../core/session";
 import { readConfig } from "../config";
+import { formatSessionRow, pickSession } from "../session-picker";
+
+function prompt(question: string): Promise<string> {
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	return new Promise((resolve) => {
+		rl.question(question, (answer) => {
+			rl.close();
+			resolve(answer.trim());
+		});
+	});
+}
 
 export const pushCommand = new Command("push")
 	.description("Push the current session to CodeTeleport")
@@ -15,32 +28,57 @@ export const pushCommand = new Command("push")
 		const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 		const log = opts.silent ? () => {} : console.log;
 
-		// Detect session
 		let sessionId: string;
 		let cwd: string;
 
 		if (opts.sessionId) {
-			sessionId = opts.sessionId;
-			// Find the cwd for this session from local files
-			const locals = listLocalSessions();
-			const match = locals.find((s) => s.sessionId === opts.sessionId);
+			// Explicit session ID — find it in local data
+			const sessions = scanProjectSessions(process.cwd());
+			const match = sessions.find((s) => s.sessionId === opts.sessionId || s.sessionId.startsWith(opts.sessionId));
 			if (!match) {
 				console.error(`Session ${opts.sessionId} not found in local Claude Code data`);
 				process.exit(1);
 			}
-			cwd = match.cwd;
+			sessionId = match.sessionId;
+			cwd = match.projectPath;
 		} else {
+			// Try process tree detection first (running inside Claude Code)
 			try {
 				const session = detectCurrentSession();
 				sessionId = session.sessionId;
 				cwd = session.cwd;
 			} catch {
-				console.error("Could not detect current session. Use --session-id or run from inside Claude Code.");
-				process.exit(1);
+				// Fall back to scanning current directory for sessions
+				const sessions = scanProjectSessions(process.cwd());
+
+				if (sessions.length === 0) {
+					console.error("No Claude Code sessions found for this directory.");
+					console.error("Run this from a project directory where you've used Claude Code.");
+					process.exit(1);
+				}
+
+				const picked = await pickSession(sessions, prompt, log);
+				if (!picked) {
+					console.log("Cancelled.");
+					process.exit(0);
+				}
+
+				sessionId = picked.sessionId;
+				cwd = picked.projectPath;
 			}
 		}
 
-		log(`Bundling session ${sessionId}...`);
+		// Show session summary before pushing
+		const sessions = scanProjectSessions(cwd);
+		const current = sessions.find((s) => s.sessionId === sessionId);
+		if (current) {
+			log("");
+			log("Pushing session:");
+			log(formatSessionRow(1, current));
+			log("");
+		}
+
+		log("Bundling...");
 
 		// Bundle
 		const bundle = await bundleSession({ sessionId, cwd });
