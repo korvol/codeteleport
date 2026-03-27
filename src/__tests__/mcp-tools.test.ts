@@ -242,8 +242,17 @@ describe("MCP Tools", () => {
 	});
 
 	describe("teleport_status", () => {
-		it("returns account status with usage info", async () => {
-			// First call: billing/usage
+		it("returns account status with user, plan, and usage info", async () => {
+			// First call: auth/me
+			mockFetch.mockResolvedValueOnce(
+				mockResponse(200, {
+					id: "user-001",
+					email: "nawaaz@korvol.com",
+					plan: "free",
+					createdAt: "2026-03-25T06:00:00Z",
+				}),
+			);
+			// Second call: billing/usage
 			mockFetch.mockResolvedValueOnce(
 				mockResponse(200, {
 					plan: "free",
@@ -253,7 +262,7 @@ describe("MCP Tools", () => {
 					versionsPerSession: 2,
 				}),
 			);
-			// Second call: sessions list
+			// Third call: sessions list
 			mockFetch.mockResolvedValueOnce(
 				mockResponse(200, {
 					sessions: [{ id: "sess-ccc", sourceMachine: "macbook", createdAt: "2026-03-25T07:00:00Z" }],
@@ -264,6 +273,7 @@ describe("MCP Tools", () => {
 			const result = await callTool("teleport_status");
 
 			expect(result.content[0].text).toContain("CodeTeleport Status");
+			expect(result.content[0].text).toContain("nawaaz@korvol.com");
 			expect(result.content[0].text).toContain("test-macbook");
 			expect(result.content[0].text).toContain("free");
 			expect(result.content[0].text).toContain("5 / 25");
