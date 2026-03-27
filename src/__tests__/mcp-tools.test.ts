@@ -33,6 +33,33 @@ vi.mock("../core/bundle", () => ({
 	}),
 }));
 
+vi.mock("../core/local", () => ({
+	scanLocalSessions: () => [
+		{
+			sessionId: "local-sess-001",
+			projectPath: "/Users/testuser/project-a",
+			projectName: "project-a",
+			encodedProjectPath: "-Users-testuser-project-a",
+			jsonlPath: "/Users/testuser/.claude/projects/-Users-testuser-project-a/local-sess-001.jsonl",
+			sizeBytes: 2_048_000,
+			messageCount: 450,
+			firstMessageAt: "2026-03-25T07:00:00.000Z",
+			lastMessageAt: "2026-03-27T14:30:00.000Z",
+		},
+		{
+			sessionId: "local-sess-002",
+			projectPath: "/Users/testuser/project-b",
+			projectName: "project-b",
+			encodedProjectPath: "-Users-testuser-project-b",
+			jsonlPath: "/Users/testuser/.claude/projects/-Users-testuser-project-b/local-sess-002.jsonl",
+			sizeBytes: 512_000,
+			messageCount: 80,
+			firstMessageAt: "2026-03-24T10:00:00.000Z",
+			lastMessageAt: "2026-03-26T09:00:00.000Z",
+		},
+	],
+}));
+
 vi.mock("../core/unbundle", () => ({
 	unbundleSession: async () => ({
 		sessionId: "test-session-001",
@@ -91,11 +118,12 @@ describe("MCP Tools", () => {
 	}
 
 	describe("tool registration", () => {
-		it("registers all 5 tools", () => {
-			expect(tools.size).toBe(5);
+		it("registers all 6 tools", () => {
+			expect(tools.size).toBe(6);
 			expect(tools.has("teleport_push")).toBe(true);
 			expect(tools.has("teleport_pull")).toBe(true);
 			expect(tools.has("teleport_list")).toBe(true);
+			expect(tools.has("teleport_local_list")).toBe(true);
 			expect(tools.has("teleport_status")).toBe(true);
 			expect(tools.has("teleport_delete")).toBe(true);
 		});
@@ -227,6 +255,27 @@ describe("MCP Tools", () => {
 			expect(result.content[0].text).toContain("CodeTeleport Status");
 			expect(result.content[0].text).toContain("test-macbook");
 			expect(result.content[0].text).toContain("5 stored");
+		});
+	});
+
+	describe("teleport_local_list", () => {
+		it("returns formatted local session list", async () => {
+			const result = await callTool("teleport_local_list", {});
+
+			expect(result.content[0].text).toContain("Local sessions");
+			expect(result.content[0].text).toContain("local-sess-001");
+			expect(result.content[0].text).toContain("project-a");
+			expect(result.content[0].text).toContain("450");
+			expect(result.content[0].text).toContain("local-sess-002");
+			expect(result.content[0].text).toContain("project-b");
+		});
+
+		it("includes session IDs and project names", async () => {
+			const result = await callTool("teleport_local_list", {});
+
+			expect(result.content[0].text).toContain("project-a");
+			expect(result.content[0].text).toContain("project-b");
+			expect(result.content[0].text).toContain("2 found");
 		});
 	});
 
