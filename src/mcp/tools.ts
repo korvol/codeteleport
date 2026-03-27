@@ -6,6 +6,7 @@ import { z } from "zod";
 import { readConfig } from "../cli/config";
 import { CodeTeleportClient } from "../client/api";
 import { bundleSession } from "../core/bundle";
+import { scanLocalSessions } from "../core/local";
 import { detectCurrentSession } from "../core/session";
 import { unbundleSession } from "../core/unbundle";
 
@@ -227,6 +228,43 @@ export function registerTools(server: McpServer) {
 				const last = sessions[0];
 				const date = new Date(last.createdAt).toLocaleString();
 				lines.push(`  last push: ${date} (${last.sourceMachine || "unknown"})`);
+			}
+
+			return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+		},
+	);
+
+	server.registerTool(
+		"teleport_local_list",
+		{
+			description: [
+				"List all Claude Code sessions on the local machine.",
+				"Scans ~/.claude/projects/ for session files and shows session ID, project name,",
+				"message count, timestamps, and file size.",
+				"No cloud access needed — reads directly from the local filesystem.",
+				"",
+				"Examples:",
+				'  "show me my local sessions"',
+				'  "what sessions do I have on this machine"',
+				'  "list local Claude Code conversations"',
+			].join("\n"),
+		},
+		async () => {
+			const sessions = scanLocalSessions();
+
+			if (sessions.length === 0) {
+				return { content: [{ type: "text" as const, text: "No local Claude Code sessions found." }] };
+			}
+
+			const lines = [`Local sessions (${sessions.length} found):`, ""];
+			for (const s of sessions) {
+				const id = s.sessionId;
+				const size =
+					s.sizeBytes < 1024 * 1024
+						? `${(s.sizeBytes / 1024).toFixed(0)} KB`
+						: `${(s.sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+				const time = s.lastMessageAt ? new Date(s.lastMessageAt).toLocaleString() : "unknown";
+				lines.push(`  ${id}  ${s.projectName}  ${s.messageCount} msgs  ${time}  ${size}`);
 			}
 
 			return { content: [{ type: "text" as const, text: lines.join("\n") }] };
