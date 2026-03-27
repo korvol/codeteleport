@@ -53,22 +53,28 @@ export async function startOAuthCallbackServer(): Promise<{
 				res.writeHead(200, { "Content-Type": "text/html" });
 
 				if (error) {
-					res.end("<html><body><h2>Authentication failed</h2><p>You can close this tab.</p></body></html>");
-					setImmediate(() => {
-						server.close();
-						rejectToken(new Error(error));
-					});
+					res.end(
+						"<html><body><h2>Authentication failed</h2><p>You can close this tab.</p></body></html>",
+						() => {
+							setTimeout(() => {
+								server.close();
+								rejectToken(new Error(error));
+							}, 500);
+						},
+					);
 					return;
 				}
 
 				if (token) {
 					res.end(
 						"<html><body><h2>Logged in to CodeTeleport!</h2><p>You can close this tab and return to the terminal.</p></body></html>",
+						() => {
+							setTimeout(() => {
+								server.close();
+								resolveToken(token);
+							}, 500);
+						},
 					);
-					setImmediate(() => {
-						server.close();
-						resolveToken(token);
-					});
 					return;
 				}
 			}
@@ -77,7 +83,7 @@ export async function startOAuthCallbackServer(): Promise<{
 			res.end();
 		});
 
-		server.listen(0, () => {
+		server.listen(0, "127.0.0.1", () => {
 			const address = server.address();
 			const port = typeof address === "object" && address ? address.port : 0;
 

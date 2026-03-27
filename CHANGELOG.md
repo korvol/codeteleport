@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.5 (2026-03-27)
+
+- **Interactive push** — `codeteleport push` scans current directory for sessions, shows picker if multiple found
+- **Interactive pull** — `codeteleport pull` lists cloud sessions, always prompts before downloading
+- **GitHub OAuth login** — `codeteleport auth login --github` opens browser for GitHub OAuth flow
+- **Login method prompt** — `codeteleport auth login` asks: (1) GitHub (2) Email & Password
+- **`--api-url` flag** — `codeteleport auth login --api-url http://localhost:8787` for local dev
+- **Local session scanner** — reads `cwd` from JSONL data (not ambiguous directory name decoding)
+- **Unconfirmed upload retry** — stale uploads no longer block re-push with 409
+
 ## 0.1.3 (2026-03-26)
 
 - **MCP tool input schemas** — all 5 tools now expose typed parameters to Claude Code (sessionId, targetDir, machine, tag, limit, label, tags)
