@@ -113,6 +113,10 @@ When used as an MCP server, CodeTeleport exposes these tools:
 - Linux — fully supported
 - Windows — not yet supported (path detection assumes Unix-style paths)
 
+## Documentation
+
+Full docs at **[docs.codeteleport.com](https://docs.codeteleport.com)** — installation, CLI reference, MCP integration, concepts, troubleshooting, and more.
+
 ## License
 
 MIT
