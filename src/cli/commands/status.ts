@@ -6,7 +6,7 @@ export const statusCommand = new Command("status")
 	.description("Show CodeTeleport account and sync status")
 	.action(async () => {
 		if (!configExists()) {
-			console.log("Not logged in. Run `codeteleport auth login` first.");
+			console.log("CodeTeleport is not configured yet. Run `codeteleport setup` to get started.");
 			return;
 		}
 

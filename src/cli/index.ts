@@ -24,4 +24,16 @@ program.addCommand(versionsCommand);
 program.addCommand(configCommand);
 program.addCommand(deleteCommand);
 
+// Global error handler — catches unhandled errors from any command
+// Shows clean message instead of stack trace
+process.on("uncaughtException", (err) => {
+	console.error(err.message);
+	process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+	console.error(err instanceof Error ? err.message : String(err));
+	process.exit(1);
+});
+
 program.parse();

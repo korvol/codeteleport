@@ -45,6 +45,22 @@ describe("CodeTeleportClient", () => {
 		});
 	});
 
+	describe("401 handling", () => {
+		it("throws helpful re-auth message on 401", async () => {
+			mockFetch.mockResolvedValueOnce(mockResponse(401, { message: "Authentication required" }));
+
+			const client = new CodeTeleportClient({ apiUrl, token });
+			await expect(client.listSessions()).rejects.toThrow("codeteleport setup");
+		});
+
+		it("throws helpful message on 403 unauthorized", async () => {
+			mockFetch.mockResolvedValueOnce(mockResponse(403, { error: "forbidden", message: "Access denied" }));
+
+			const client = new CodeTeleportClient({ apiUrl, token });
+			await expect(client.listSessions()).rejects.toThrow("API error 403");
+		});
+	});
+
 	describe("register", () => {
 		it("calls POST /auth/register with email and password", async () => {
 			mockFetch.mockResolvedValueOnce(mockResponse(201, { token: "jwt-token", user: { id: "u1", email: "a@b.com" } }));

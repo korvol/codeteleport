@@ -6,7 +6,7 @@ import type { Config } from "../shared/types";
 export function readConfig(configDir: string = CONFIG_DIR): Config {
 	const configFile = path.join(configDir, "config.json");
 	if (!fs.existsSync(configFile)) {
-		throw new Error("Not logged in. Run `codeteleport auth login` first.");
+		throw new Error("CodeTeleport is not configured yet. Run `codeteleport setup` to get started.");
 	}
 	try {
 		const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
@@ -15,7 +15,7 @@ export function readConfig(configDir: string = CONFIG_DIR): Config {
 		}
 		return config;
 	} catch {
-		throw new Error("Config file is corrupted. Run `codeteleport auth login` to re-authenticate.");
+		throw new Error("Config file is corrupted. Run `codeteleport setup` to re-configure.");
 	}
 }
 

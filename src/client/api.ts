@@ -74,6 +74,9 @@ export class CodeTeleportClient {
 		});
 
 		if (!res.ok) {
+			if (res.status === 401) {
+				throw new Error("Authentication expired or invalid. Run `codeteleport setup` to re-authenticate.");
+			}
 			const error = (await res.json().catch(() => ({ message: res.statusText }))) as { message: string };
 			throw new Error(`API error ${res.status}: ${error.message}`);
 		}

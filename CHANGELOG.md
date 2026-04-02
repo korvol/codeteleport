@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 (2026-04-02)
+
+- **Setup wizard** — `codeteleport setup` walks through agent, auth, device, and MCP in one command
+- **Config command** — `codeteleport config` to view, `codeteleport config set` to update settings
+- **Agent registry** — extensible agent config system (claude-code default)
+- **Generic descriptions** — MCP tools and CLI messages no longer hardcode agent names
+
 ## 0.2.0 (2026-04-01)
 
 - **Package renamed** — `@codeteleport/mcp` is now `codeteleport`. Install with `npm install -g codeteleport`

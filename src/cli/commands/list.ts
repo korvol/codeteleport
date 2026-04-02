@@ -67,7 +67,7 @@ async function listLocal(opts: { push?: boolean; json?: boolean }) {
 	try {
 		config = readConfig();
 	} catch {
-		console.error('\nNot logged in. Run "codeteleport auth login" first.');
+		console.error('\nCodeTeleport is not configured yet. Run "codeteleport setup" to get started.');
 		return;
 	}
 

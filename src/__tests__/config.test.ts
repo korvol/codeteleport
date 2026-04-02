@@ -93,7 +93,7 @@ describe("Config", () => {
 
 	describe("readConfig", () => {
 		it("throws if config doesn't exist", () => {
-			expect(() => readConfig(configDir)).toThrow("Not logged in");
+			expect(() => readConfig(configDir)).toThrow("not configured yet");
 		});
 	});
 
