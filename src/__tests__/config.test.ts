@@ -115,4 +115,33 @@ describe("Config", () => {
 			expect(configExists(configDir)).toBe(true);
 		});
 	});
+
+	describe("agent field backwards compatibility", () => {
+		it("config without agent field defaults to claude-code on read", () => {
+			fs.mkdirSync(configDir, { recursive: true });
+			fs.writeFileSync(
+				configFile,
+				JSON.stringify({ token: "ctk_live_abc", apiUrl: "https://api.test.com/v1", deviceName: "test" }),
+			);
+
+			const config = readConfig(configDir);
+			expect(config.agent).toBe("claude-code");
+		});
+
+		it("config with agent field preserves it", () => {
+			fs.mkdirSync(configDir, { recursive: true });
+			fs.writeFileSync(
+				configFile,
+				JSON.stringify({
+					token: "ctk_live_abc",
+					apiUrl: "https://api.test.com/v1",
+					deviceName: "test",
+					agent: "claude-code",
+				}),
+			);
+
+			const config = readConfig(configDir);
+			expect(config.agent).toBe("claude-code");
+		});
+	});
 });

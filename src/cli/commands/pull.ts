@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
 import { unbundleSession } from "../../core/unbundle";
+import { getAgent } from "../../shared/agents";
 import { pickCloudSession } from "../cloud-session-picker";
 import { readConfig } from "../config";
 
@@ -27,6 +28,7 @@ export const pullCommand = new Command("pull")
 	.action(async (opts) => {
 		try {
 			const config = readConfig();
+			const agent = getAgent(config.agent);
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
 			let sessionId: string;
@@ -61,6 +63,7 @@ export const pullCommand = new Command("pull")
 				const result = await unbundleSession({
 					bundlePath: tmpFile,
 					targetDir,
+					resumeCommandPrefix: agent.resumeCommand,
 				});
 
 				console.log("");

@@ -52,8 +52,8 @@ export const pushCommand = new Command("push")
 				const sessions = scanProjectSessions(process.cwd());
 
 				if (sessions.length === 0) {
-					console.error("No AI coding sessions found for this directory.");
-					console.error("Run this from a project directory where you've used Claude Code.");
+					console.error("No coding sessions found for this directory.");
+					console.error("Run this from a project directory where you've used your coding agent.");
 					process.exit(1);
 				}
 

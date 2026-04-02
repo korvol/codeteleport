@@ -118,7 +118,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		return {
 			sessionId,
 			installedTo: targetProjDir,
-			resumeCommand: `claude --resume ${sessionId}`,
+			resumeCommand: `${options.resumeCommandPrefix || "claude --resume"} ${sessionId}`,
 		};
 	} finally {
 		fs.rmSync(stagingDir, { recursive: true, force: true });

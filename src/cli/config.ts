@@ -9,7 +9,11 @@ export function readConfig(configDir: string = CONFIG_DIR): Config {
 		throw new Error("Not logged in. Run `codeteleport auth login` first.");
 	}
 	try {
-		return JSON.parse(fs.readFileSync(configFile, "utf-8"));
+		const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+		if (!config.agent) {
+			config.agent = "claude-code";
+		}
+		return config;
 	} catch {
 		throw new Error("Config file is corrupted. Run `codeteleport auth login` to re-authenticate.");
 	}

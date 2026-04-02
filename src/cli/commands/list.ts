@@ -20,7 +20,7 @@ function prompt(question: string): Promise<string> {
 
 export const listCommand = new Command("list")
 	.description("List sessions")
-	.option("--local", "List local sessions from ~/.claude/")
+	.option("--local", "List local sessions on this machine")
 	.option("--cloud", "List cloud sessions")
 	.option("--push", "Interactive push mode (local only)")
 	.option("--json", "Output as JSON")

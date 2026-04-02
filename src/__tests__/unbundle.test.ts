@@ -187,6 +187,27 @@ describe("unbundleSession", () => {
 		expect(fs.existsSync(jsonlPath)).toBe(true);
 	});
 
+	it("uses resumeCommandPrefix when provided", async () => {
+		const result = await unbundleSession({
+			bundlePath,
+			targetUserDir: path.join(tmpDir, "target-home"),
+			claudeDir: targetClaudeDir,
+			resumeCommandPrefix: "gemini --resume",
+		});
+
+		expect(result.resumeCommand).toBe(`gemini --resume ${sessionId}`);
+	});
+
+	it("defaults to claude --resume when resumeCommandPrefix not provided", async () => {
+		const result = await unbundleSession({
+			bundlePath,
+			targetUserDir: path.join(tmpDir, "target-home"),
+			claudeDir: targetClaudeDir,
+		});
+
+		expect(result.resumeCommand).toBe(`claude --resume ${sessionId}`);
+	});
+
 	it("throws for invalid bundle (missing meta.json)", async () => {
 		// Create a bundle without meta.json
 		const badStaging = path.join(tmpDir, "bad-staging");

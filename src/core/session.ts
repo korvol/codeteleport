@@ -34,7 +34,7 @@ export function detectCurrentSession(startPid?: number, claudeDir: string = CLAU
 	}
 
 	throw new Error(
-		"Could not find an AI coding session in the process tree. Are you running this from inside Claude Code?",
+		"Could not find a coding session in the process tree. Are you running this from inside your coding agent?",
 	);
 }
 

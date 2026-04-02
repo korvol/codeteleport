@@ -9,6 +9,7 @@ import { bundleSession } from "../core/bundle";
 import { scanLocalSessions } from "../core/local";
 import { detectCurrentSession } from "../core/session";
 import { unbundleSession } from "../core/unbundle";
+import { getAgent } from "../shared/agents";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
@@ -98,14 +99,14 @@ export function registerTools(server: McpServer) {
 			description: [
 				"Pull a session from CodeTeleport cloud to this machine.",
 				"Downloads the bundle, rewrites all internal paths for this machine's username,",
-				"and installs it so you can resume with `claude --resume <id>`.",
+				"and installs it so you can resume where you left off.",
 				"",
 				"If sessionId is provided, pulls that specific session.",
 				"Otherwise lists available sessions for you to choose from.",
 				"Use targetDir to anchor the session at a specific directory path.",
 				"",
 				"Examples:",
-				'  "pull my session from my MacBook"',
+				'  "pull my session from my other machine"',
 				'  "pull session abc123 to /Users/bob/projects/myapp"',
 				'  "show me my available sessions"',
 			].join("\n"),
@@ -119,6 +120,7 @@ export function registerTools(server: McpServer) {
 		},
 		safeToolHandler(async (args) => {
 			const config = readConfig();
+			const agent = getAgent(config.agent);
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
 			if (args.sessionId) {
@@ -133,6 +135,7 @@ export function registerTools(server: McpServer) {
 					const result = await unbundleSession({
 						bundlePath: tmpFile,
 						targetDir: args.targetDir as string | undefined,
+						resumeCommandPrefix: agent.resumeCommand,
 					});
 
 					return {
@@ -268,15 +271,15 @@ export function registerTools(server: McpServer) {
 		"teleport_local_list",
 		{
 			description: [
-				"List all AI coding sessions on the local machine.",
-				"Scans ~/.claude/projects/ for session files and shows session ID, project name,",
-				"message count, timestamps, and file size.",
+				"List all coding sessions on the local machine.",
+				"Scans the agent's local data directory for session files and shows session ID,",
+				"project name, message count, timestamps, and file size.",
 				"No cloud access needed — reads directly from the local filesystem.",
 				"",
 				"Examples:",
 				'  "show me my local sessions"',
 				'  "what sessions do I have on this machine"',
-				'  "list local Claude Code conversations"',
+				'  "list local coding conversations"',
 			].join("\n"),
 		},
 		safeToolHandler(async () => {
