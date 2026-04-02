@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3 (2026-04-02)
+
+- **README updated** — improved documentation with clearer examples and links
+
 ## 0.2.2 (2026-04-02)
 
 - **Setup wizard** — `codeteleport setup` walks through agent, auth, device, and MCP in one command

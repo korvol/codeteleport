@@ -194,21 +194,6 @@ Resume with: claude --resume c3a05473-9f12-4a2b-ae27-9478ab66d216
 
 ---
 
-## Pricing
-
-The CLI and MCP server are open source under the MIT license. Cloud sync has a free tier — no credit card required.
-
-| | Free | Pro |
-| --- | --- | --- |
-| Sessions | 25 | Unlimited |
-| Devices | 3 | Unlimited |
-| Versions per session | 2 | 10 |
-| Price | $0 | $5 / quarter or $15 / year |
-
-[See pricing →](https://codeteleport.com/#pricing)
-
----
-
 ## Platform Support
 
 | Platform | Status |
