@@ -27,20 +27,16 @@ Teleport the session. Resume on the other machine. Full context intact.
 
 ## Quick Start
 
-### 1. Install & Log in
+### 1. Install & Set up
 
 ```bash
 npm install -g codeteleport
-codeteleport auth login
+codeteleport setup
 ```
 
-### 2. Add the MCP server to Claude Code
+The setup wizard walks you through everything in 30 seconds — agent selection, login, device name, and MCP registration.
 
-```bash
-claude mcp add codeteleport -- codeteleport-mcp
-```
-
-### 3. Teleport
+### 2. Teleport
 
 Just talk to Claude Code:
 
@@ -125,12 +121,14 @@ Seven tools available inside Claude Code:
 The same operations are available from the terminal:
 
 ```bash
+codeteleport setup             # First-time onboarding wizard
 codeteleport push              # Interactive session picker → push to cloud
 codeteleport pull              # Interactive session picker → pull from cloud
 codeteleport pull --version N  # Pull a specific version
 codeteleport list              # List local or cloud sessions
 codeteleport versions <id>     # Show version history for a session
 codeteleport status            # Account info, plan, usage
+codeteleport config            # View current configuration
 codeteleport delete            # Delete a cloud session
 codeteleport auth login        # Log in (GitHub OAuth or email)
 ```
@@ -191,6 +189,21 @@ Resume with: claude --resume c3a05473-9f12-4a2b-ae27-9478ab66d216
 | File history | Snapshots of files read or edited |
 | Paste cache | Content pasted into the conversation |
 | Shell snapshots | Terminal state during the session |
+
+---
+
+## Pricing
+
+The CLI and MCP server are open source under the MIT license. Cloud sync has a free tier — no credit card required.
+
+| | Free | Pro |
+| --- | --- | --- |
+| Sessions | 25 | Unlimited |
+| Devices | 3 | Unlimited |
+| Versions per session | 2 | 10 |
+| Price | $0 | $5 / quarter or $15 / year |
+
+[See pricing →](https://codeteleport.com/#pricing)
 
 ---
 
