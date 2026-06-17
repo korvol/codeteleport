@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 (2026-06-17)
+
+- **Project memory bundling** — `push` now bundles project memory (`~/.claude/projects/<cwd>/memory/`) and `pull` restores it under the target project. The default `merge` policy unions `MEMORY.md` by line and never clobbers other hand-edited memory files (`overwrite` / `skip` also available).
+- **Working/temp file bundling** — `codeteleport push --include <paths>` (comma-separated, repeatable) and the `includePaths` field on the `teleport_push` MCP tool bundle extra files a session created or depends on (e.g. `/tmp/*.json`); they are restored to their path-rewritten locations on `pull`. Files edited via Edit/Write during the session are included automatically. An allowlist (cwd / temp roots), a sensitive deny-list (`~/.ssh`, `~/.aws`, `*.pem`, `*.key`, `.env*`, `id_*`, `.netrc`, `.npmrc`, `credentials`, …), and 25 MB/file · 100 MB total caps guard what leaves the machine, and `push` prints a manifest of what was included and skipped. Restore is contained to the target project/temp roots so a bundle can't write outside them.
+
 ## 0.2.3 (2026-04-02)
 
 - **README updated** — improved documentation with clearer examples and links
