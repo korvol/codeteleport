@@ -1,9 +1,46 @@
+import fs from "node:fs";
+import path from "node:path";
+import { SENSITIVE_FILE_PATTERNS, SENSITIVE_HOME_DIRS } from "../shared/constants";
+
 /**
  * Encode a filesystem path the way Claude Code does for project directories.
  * e.g. "/Users/alice/myproject" → "-Users-alice-myproject"
  */
 export function encodePath(fsPath: string): string {
 	return fsPath.replace(/\//g, "-");
+}
+
+/** Resolve a path's real location, falling back to the input if it can't be resolved. */
+export function safeRealpath(p: string): string {
+	try {
+		return fs.realpathSync(p);
+	} catch {
+		return p;
+	}
+}
+
+/** True if `child` is `parent` or sits inside it (prefix match on a path boundary). */
+export function isUnder(child: string, parent: string): boolean {
+	if (child === parent) return true;
+	const withSep = parent.endsWith(path.sep) ? parent : parent + path.sep;
+	return child.startsWith(withSep);
+}
+
+/**
+ * Hard deny-list: secrets/keys must never travel (on bundle) nor be written (on restore),
+ * even from/to an allowed root. Matches sensitive filename patterns anywhere and the
+ * home-anchored sensitive directories (~/.ssh, ~/.aws, ~/.config, ~/.gnupg).
+ */
+export function isSensitivePath(originalPath: string, realPath: string, homeDir: string): boolean {
+	const bases = [path.basename(originalPath), path.basename(realPath)];
+	for (const pattern of SENSITIVE_FILE_PATTERNS) {
+		if (bases.some((b) => pattern.test(b))) return true;
+	}
+	for (const dir of SENSITIVE_HOME_DIRS) {
+		const root = path.join(homeDir, dir);
+		if (isUnder(originalPath, root) || isUnder(realPath, root)) return true;
+	}
+	return false;
 }
 
 /**

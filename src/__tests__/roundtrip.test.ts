@@ -255,4 +255,101 @@ describe("Round-trip: bundle → unbundle", () => {
 		// Both should have the same checksum (same input → same output)
 		expect(result1.checksum).toBe(result2.checksum);
 	});
+
+	it("round-trips memory + extra files cross-user and refuses sensitive paths", async () => {
+		// Use REAL temp dirs so the allowlist (cwd / tmpdir) and file existence checks apply.
+		const srcRoot = fs.mkdtempSync(path.join(os.tmpdir(), "rt-src-"));
+		const tgtRoot = fs.mkdtempSync(path.join(os.tmpdir(), "rt-tgt-"));
+		try {
+			const srcHome = path.join(srcRoot, "home");
+			const srcCwd = path.join(srcHome, "projects", "app");
+			const srcClaude = path.join(srcHome, ".claude");
+			const sid = "rt-mem-extra-001";
+			const projDir = path.join(srcClaude, "projects", encodePath(srcCwd));
+			fs.mkdirSync(projDir, { recursive: true });
+			fs.mkdirSync(srcCwd, { recursive: true });
+
+			// A working file the agent edited (picked up via scanner.filesModified)
+			const cwdFile = path.join(srcCwd, "notes.txt");
+			fs.writeFileSync(cwdFile, "working notes");
+			fs.writeFileSync(
+				path.join(projDir, `${sid}.jsonl`),
+				[
+					JSON.stringify({ type: "user", cwd: srcCwd, message: { content: "hi" } }),
+					JSON.stringify({
+						type: "assistant",
+						cwd: srcCwd,
+						message: { content: "x" },
+						toolCalls: [{ name: "Write", input: { file_path: cwdFile } }],
+					}),
+				].join("\n"),
+			);
+
+			// Project memory
+			const memDir = path.join(projDir, "memory");
+			fs.mkdirSync(memDir, { recursive: true });
+			fs.writeFileSync(path.join(memDir, "MEMORY.md"), `- ref ${srcCwd}/notes.txt`);
+
+			// A caller-supplied temp file (allowlisted via tmpdir root)
+			const tmpExtra = path.join(srcRoot, "payload.json");
+			fs.writeFileSync(tmpExtra, '{"k":1}');
+
+			// A sensitive file that must be refused
+			const sshDir = path.join(srcHome, ".ssh");
+			fs.mkdirSync(sshDir, { recursive: true });
+			const sshKey = path.join(sshDir, "id_rsa");
+			fs.writeFileSync(sshKey, "PRIVATE KEY");
+
+			// ── BUNDLE ──
+			const bundle = await bundleSession({
+				sessionId: sid,
+				cwd: srcCwd,
+				outputDir: srcRoot,
+				claudeDir: srcClaude,
+				sourceUserDir: srcHome,
+				includePaths: [tmpExtra, sshKey],
+			});
+
+			expect(bundle.metadata.hasMemory).toBe(true);
+			const includedPaths = bundle.extraFiles?.included.map((e) => e.path) ?? [];
+			expect(includedPaths).toContain(tmpExtra);
+			expect(includedPaths).toContain(cwdFile);
+			expect(includedPaths).not.toContain(sshKey);
+			expect(bundle.extraFiles?.skipped.some((s) => s.path === sshKey && /sensitive/i.test(s.reason))).toBe(true);
+
+			// Delete the temp file to prove restore re-creates it
+			fs.rmSync(tmpExtra);
+
+			// ── UNBUNDLE (as a different user) ──
+			const tgtHome = path.join(tgtRoot, "home");
+			const tgtClaude = path.join(tgtHome, ".claude");
+			fs.mkdirSync(tgtHome, { recursive: true });
+
+			await unbundleSession({ bundlePath: bundle.bundlePath, targetUserDir: tgtHome, claudeDir: tgtClaude });
+
+			const tgtCwd = srcCwd.replace(srcHome, tgtHome);
+			const tgtProj = path.join(tgtClaude, "projects", encodePath(tgtCwd));
+
+			// Memory restored + rewritten
+			const memOut = path.join(tgtProj, "memory", "MEMORY.md");
+			expect(fs.existsSync(memOut)).toBe(true);
+			expect(fs.readFileSync(memOut, "utf-8")).toContain(`${tgtCwd}/notes.txt`);
+			expect(fs.readFileSync(memOut, "utf-8")).not.toContain(srcHome);
+
+			// cwd-relative working file restored at the rewritten path
+			const cwdFileOut = path.join(tgtCwd, "notes.txt");
+			expect(fs.existsSync(cwdFileOut)).toBe(true);
+			expect(fs.readFileSync(cwdFileOut, "utf-8")).toBe("working notes");
+
+			// /tmp passthrough file restored at the identical path
+			expect(fs.existsSync(tmpExtra)).toBe(true);
+			expect(fs.readFileSync(tmpExtra, "utf-8")).toBe('{"k":1}');
+
+			// Sensitive key never restored
+			expect(fs.existsSync(path.join(tgtHome, ".ssh", "id_rsa"))).toBe(false);
+		} finally {
+			fs.rmSync(srcRoot, { recursive: true, force: true });
+			fs.rmSync(tgtRoot, { recursive: true, force: true });
+		}
+	});
 });

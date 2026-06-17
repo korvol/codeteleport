@@ -12,6 +12,13 @@ export interface BundleResult {
 	sizeBytes: number;
 	checksum: string; // "sha256:<hex>"
 	metadata: SessionMetadata;
+	/** Manifest of working/temp files bundled (Part B) — for the user's safety review. */
+	extraFiles?: ExtraFilesManifest;
+}
+
+export interface ExtraFilesManifest {
+	included: Array<{ path: string; sizeBytes: number }>;
+	skipped: Array<{ path: string; reason: string }>;
 }
 
 export interface BundleOptions {
@@ -20,12 +27,18 @@ export interface BundleOptions {
 	outputDir?: string;
 	claudeDir?: string; // override ~/.claude for testing
 	sourceUserDir?: string; // override os.homedir() for testing
+	/** Absolute paths of working/temp files the session created or depends on (e.g. /tmp/*.json). */
+	includePaths?: string[];
 }
 
 export interface UnbundleResult {
 	sessionId: string;
 	installedTo: string;
 	resumeCommand: string;
+	/** Per-file disposition of restored project memory (Part A). */
+	memoryInstalled?: { written: string[]; merged: string[]; skipped: string[] };
+	/** Per-file disposition of restored working/temp files (Part B). */
+	extraFilesInstalled?: Array<{ path: string; action: "written" | "overwritten" | "skipped" }>;
 }
 
 export interface UnbundleOptions {
@@ -34,6 +47,10 @@ export interface UnbundleOptions {
 	targetUserDir?: string; // override — auto-detected from targetDir if not provided
 	claudeDir?: string; // override ~/.claude for testing
 	resumeCommandPrefix?: string; // override "claude --resume" — from agent config
+	/** How to handle pre-existing memory files on the target. Default "merge". */
+	memoryConflict?: "merge" | "overwrite" | "skip";
+	/** How to handle pre-existing extra files on the target. Default "overwrite". */
+	extraFilesConflict?: "overwrite" | "skip";
 }
 
 export interface ScannedAssets {
@@ -59,6 +76,10 @@ export interface SessionMetadata {
 	hasPasteCache?: boolean;
 	hasShellSnapshots?: boolean;
 	claudeModel?: string;
+	hasMemory?: boolean;
+	memoryFileCount?: number;
+	extraFileCount?: number;
+	extraFilesIncluded?: string[];
 }
 
 export interface Config {

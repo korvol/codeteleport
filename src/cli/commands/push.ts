@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
 import { bundleSession } from "../../core/bundle";
 import { scanProjectSessions } from "../../core/local";
+import { EXTRA_FILES_CLI_HINT, formatBundleManifest, parseIncludePaths } from "../../core/manifest";
 import { detectCurrentSession } from "../../core/session";
 import { readConfig } from "../config";
 import { formatSessionRow, pickSession } from "../session-picker";
@@ -22,6 +23,12 @@ export const pushCommand = new Command("push")
 	.option("--session-id <id>", "Session ID (auto-detected if inside Claude Code)")
 	.option("--label <text>", "Label for the session")
 	.option("--tags <tags>", "Comma-separated tags", (val) => val.split(","))
+	.option(
+		"--include <paths>",
+		"Extra working/temp file paths to bundle (comma-separated, repeatable)",
+		(val: string, prev: string[]) => prev.concat(val),
+		[] as string[],
+	)
 	.option("--silent", "Suppress output (for auto-sync hooks)")
 	.action(async (opts) => {
 		const config = readConfig();
@@ -81,9 +88,21 @@ export const pushCommand = new Command("push")
 		log("Bundling...");
 
 		// Bundle
-		const bundle = await bundleSession({ sessionId, cwd });
+		const includePaths = parseIncludePaths((opts.include as string[]) ?? []);
+		const bundle = await bundleSession({ sessionId, cwd, includePaths });
 
 		log(`  size: ${(bundle.sizeBytes / 1024).toFixed(0)} KB`);
+
+		// Show what extra files / memory are leaving the machine
+		const manifest = formatBundleManifest(bundle);
+		if (manifest) {
+			log("");
+			log(manifest);
+		}
+		if (includePaths.length === 0) {
+			log("");
+			log(EXTRA_FILES_CLI_HINT);
+		}
 
 		// Upload
 		try {

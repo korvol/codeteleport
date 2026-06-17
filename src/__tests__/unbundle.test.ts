@@ -3,7 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import * as tar from "tar";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { unbundleSession } from "../core/unbundle";
+import { encodePath } from "../core/paths";
+import { installMemory, isRestoreTargetSafe, unbundleSession } from "../core/unbundle";
+
+const identity = (s: string) => s;
+
+async function buildBundle(tmpRoot: string, populate: (staging: string) => void): Promise<string> {
+	const staging = fs.mkdtempSync(path.join(tmpRoot, "stg-"));
+	populate(staging);
+	const bundlePath = path.join(tmpRoot, `bundle-${path.basename(staging)}.tar.gz`);
+	await tar.create({ gzip: true, file: bundlePath, cwd: staging }, fs.readdirSync(staging));
+	return bundlePath;
+}
 
 describe("unbundleSession", () => {
 	let tmpDir: string;
@@ -224,5 +235,282 @@ describe("unbundleSession", () => {
 				claudeDir: targetClaudeDir,
 			}),
 		).rejects.toThrow("meta.json not found");
+	});
+});
+
+describe("installMemory (Part A)", () => {
+	let root: string;
+	let src: string;
+	let dst: string;
+
+	beforeEach(() => {
+		root = fs.mkdtempSync(path.join(os.tmpdir(), "installmem-"));
+		src = path.join(root, "src");
+		dst = path.join(root, "dst");
+		fs.mkdirSync(src, { recursive: true });
+		fs.mkdirSync(dst, { recursive: true });
+	});
+
+	afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+	it("merge: unions MEMORY.md by line and never clobbers other .md files", () => {
+		fs.writeFileSync(path.join(src, "MEMORY.md"), "- a\n- b\n- c");
+		fs.writeFileSync(path.join(src, "note.md"), "incoming note");
+		fs.writeFileSync(path.join(dst, "MEMORY.md"), "- a\n- x");
+		fs.writeFileSync(path.join(dst, "note.md"), "EXISTING note");
+
+		const r = installMemory(src, dst, identity, "merge");
+
+		expect(fs.readFileSync(path.join(dst, "MEMORY.md"), "utf-8")).toBe("- a\n- x\n- b\n- c");
+		expect(fs.readFileSync(path.join(dst, "note.md"), "utf-8")).toBe("EXISTING note");
+		expect(r.merged).toContain("MEMORY.md");
+		expect(r.skipped).toContain("note.md");
+	});
+
+	it("merge: writes files absent on the target", () => {
+		fs.writeFileSync(path.join(src, "new.md"), "brand new");
+
+		const r = installMemory(src, dst, identity, "merge");
+
+		expect(fs.readFileSync(path.join(dst, "new.md"), "utf-8")).toBe("brand new");
+		expect(r.written).toContain("new.md");
+	});
+
+	it("overwrite: replaces existing files", () => {
+		fs.writeFileSync(path.join(src, "note.md"), "NEW");
+		fs.writeFileSync(path.join(dst, "note.md"), "OLD");
+
+		const r = installMemory(src, dst, identity, "overwrite");
+
+		expect(fs.readFileSync(path.join(dst, "note.md"), "utf-8")).toBe("NEW");
+		expect(r.written).toContain("note.md");
+	});
+
+	it("skip: keeps existing files untouched", () => {
+		fs.writeFileSync(path.join(src, "note.md"), "NEW");
+		fs.writeFileSync(path.join(dst, "note.md"), "OLD");
+
+		const r = installMemory(src, dst, identity, "skip");
+
+		expect(fs.readFileSync(path.join(dst, "note.md"), "utf-8")).toBe("OLD");
+		expect(r.skipped).toContain("note.md");
+	});
+
+	it("rewrites .md contents through the rewrite function", () => {
+		fs.writeFileSync(path.join(src, "paths.md"), "see /Users/alice/x");
+
+		installMemory(src, dst, (c) => c.replace("/Users/alice", "/Users/bob"), "merge");
+
+		expect(fs.readFileSync(path.join(dst, "paths.md"), "utf-8")).toBe("see /Users/bob/x");
+	});
+
+	it("merge preserves a single trailing newline and injects no blank line", () => {
+		fs.writeFileSync(path.join(src, "MEMORY.md"), "- a\n- b\n");
+		fs.writeFileSync(path.join(dst, "MEMORY.md"), "- a\n");
+
+		installMemory(src, dst, identity, "merge");
+
+		expect(fs.readFileSync(path.join(dst, "MEMORY.md"), "utf-8")).toBe("- a\n- b\n");
+	});
+});
+
+describe("isRestoreTargetSafe (Part B restore safety)", () => {
+	const home = "/Users/bob";
+	const roots = ["/Users/bob/app", "/Users/bob/.claude", "/tmp", "/private/tmp", os.tmpdir()];
+
+	it("allows targets under the project cwd or temp roots", () => {
+		expect(isRestoreTargetSafe("/Users/bob/app/notes/x.txt", roots, home)).toBe(true);
+		expect(isRestoreTargetSafe("/tmp/data.json", roots, home)).toBe(true);
+	});
+
+	it("rejects targets outside all allowed roots", () => {
+		expect(isRestoreTargetSafe("/etc/cron.d/evil", roots, home)).toBe(false);
+		expect(isRestoreTargetSafe("/Users/other/proj/x", roots, home)).toBe(false);
+	});
+
+	it("rejects path traversal that escapes an allowed root", () => {
+		expect(isRestoreTargetSafe("/Users/bob/app/../../../etc/x", roots, home)).toBe(false);
+	});
+
+	it("rejects sensitive targets even under an allowed root", () => {
+		expect(isRestoreTargetSafe("/tmp/.env", roots, home)).toBe(false);
+		expect(isRestoreTargetSafe("/Users/bob/app/server.pem", roots, home)).toBe(false);
+	});
+});
+
+describe("unbundleSession — anchors repeated home dir in cwd (Part B)", () => {
+	it("rewrites all occurrences of the home dir when anchoring cwd", async () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "unbundle-rep-"));
+		try {
+			const targetHome = path.join(tmpDir, "bob");
+			const targetClaude = path.join(targetHome, ".claude");
+			const sUser = "/Users/alice";
+			const sCwd = "/Users/alice/work/Users/alice/app"; // home string repeats
+			const bundlePath = await buildBundle(tmpDir, (s) => {
+				fs.writeFileSync(
+					path.join(s, "meta.json"),
+					JSON.stringify({ sessionId: "rep-1", sourceCwd: sCwd, sourceUserDir: sUser }),
+				);
+				fs.writeFileSync(path.join(s, "session.jsonl"), JSON.stringify({ type: "user", cwd: sCwd }));
+			});
+
+			const result = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+			const expectedCwd = sCwd.split(sUser).join(targetHome); // all occurrences
+			expect(result.installedTo).toBe(path.join(targetClaude, "projects", encodePath(expectedCwd)));
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("unbundleSession — project memory restore (Part A)", () => {
+	let tmpDir: string;
+	let targetHome: string;
+	let targetClaude: string;
+	const sessionId = "unbundle-mem-001";
+	const sourceCwd = "/Users/alice/app";
+	const sourceUserDir = "/Users/alice";
+
+	beforeEach(() => {
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "unbundle-mem-"));
+		targetHome = path.join(tmpDir, "target-home");
+		targetClaude = path.join(targetHome, ".claude");
+		fs.mkdirSync(targetHome, { recursive: true });
+	});
+
+	afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+	it("restores memory under the target project dir with .md path rewrite", async () => {
+		const bundlePath = await buildBundle(tmpDir, (s) => {
+			fs.writeFileSync(path.join(s, "meta.json"), JSON.stringify({ sessionId, sourceCwd, sourceUserDir }));
+			fs.writeFileSync(path.join(s, "session.jsonl"), JSON.stringify({ type: "user", cwd: sourceCwd }));
+			const mem = path.join(s, "memory");
+			fs.mkdirSync(mem, { recursive: true });
+			fs.writeFileSync(path.join(mem, "MEMORY.md"), `- ref ${sourceCwd}/x.md`);
+			fs.writeFileSync(path.join(mem, "x.md"), "note about /Users/alice/app");
+		});
+
+		const result = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		const targetCwd = sourceCwd.replace(sourceUserDir, targetHome);
+		const memDir = path.join(targetClaude, "projects", targetCwd.replace(/\//g, "-"), "memory");
+		expect(fs.existsSync(path.join(memDir, "MEMORY.md"))).toBe(true);
+		const mc = fs.readFileSync(path.join(memDir, "MEMORY.md"), "utf-8");
+		expect(mc).toContain(`${targetCwd}/x.md`);
+		expect(mc).not.toContain("/Users/alice");
+		expect(result.memoryInstalled?.written).toContain("MEMORY.md");
+	});
+});
+
+describe("unbundleSession — extra files restore (Part B)", () => {
+	let tmpDir: string;
+	let targetHome: string;
+	let targetClaude: string;
+	const sessionId = "unbundle-extra-001";
+	const sourceCwd = "/Users/alice/app";
+	const sourceUserDir = "/Users/alice";
+
+	beforeEach(() => {
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "unbundle-extra-"));
+		targetHome = path.join(tmpDir, "target-home");
+		targetClaude = path.join(targetHome, ".claude");
+		fs.mkdirSync(targetHome, { recursive: true });
+	});
+
+	afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+
+	function bundleWithExtra(originalPath: string, content: string): Promise<string> {
+		return buildBundle(tmpDir, (s) => {
+			fs.writeFileSync(path.join(s, "meta.json"), JSON.stringify({ sessionId, sourceCwd, sourceUserDir }));
+			fs.writeFileSync(path.join(s, "session.jsonl"), "{}");
+			fs.mkdirSync(path.join(s, "extra-files"), { recursive: true });
+			fs.writeFileSync(path.join(s, "extra-files", "stored1"), content);
+			fs.writeFileSync(
+				path.join(s, "extra-files-manifest.json"),
+				JSON.stringify([{ stored: "stored1", originalPath, sizeBytes: content.length, rewriteContent: false }]),
+			);
+		});
+	}
+
+	it("restores an extra file to a /tmp passthrough path (written)", async () => {
+		const restoreTmp = fs.mkdtempSync(path.join(os.tmpdir(), "ct-restore-"));
+		const originalPath = path.join(restoreTmp, "data.json");
+		const bundlePath = await bundleWithExtra(originalPath, "DATA!");
+
+		const r = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		expect(fs.readFileSync(originalPath, "utf-8")).toBe("DATA!");
+		expect(r.extraFilesInstalled?.some((e) => e.path === originalPath && e.action === "written")).toBe(true);
+		fs.rmSync(restoreTmp, { recursive: true, force: true });
+	});
+
+	it("overwrites a pre-existing target by default", async () => {
+		const restoreTmp = fs.mkdtempSync(path.join(os.tmpdir(), "ct-restore-"));
+		const originalPath = path.join(restoreTmp, "data.json");
+		fs.writeFileSync(originalPath, "OLD");
+		const bundlePath = await bundleWithExtra(originalPath, "NEW!");
+
+		const r = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		expect(fs.readFileSync(originalPath, "utf-8")).toBe("NEW!");
+		expect(r.extraFilesInstalled?.some((e) => e.path === originalPath && e.action === "overwritten")).toBe(true);
+		fs.rmSync(restoreTmp, { recursive: true, force: true });
+	});
+
+	it("honors extraFilesConflict='skip' for pre-existing targets", async () => {
+		const restoreTmp = fs.mkdtempSync(path.join(os.tmpdir(), "ct-restore-"));
+		const originalPath = path.join(restoreTmp, "data.json");
+		fs.writeFileSync(originalPath, "OLD");
+		const bundlePath = await bundleWithExtra(originalPath, "NEW!");
+
+		const r = await unbundleSession({
+			bundlePath,
+			targetUserDir: targetHome,
+			claudeDir: targetClaude,
+			extraFilesConflict: "skip",
+		});
+
+		expect(fs.readFileSync(originalPath, "utf-8")).toBe("OLD");
+		expect(r.extraFilesInstalled?.some((e) => e.path === originalPath && e.action === "skipped")).toBe(true);
+		fs.rmSync(restoreTmp, { recursive: true, force: true });
+	});
+
+	it("rewrites cwd-relative extra-file target paths to the target cwd", async () => {
+		const originalPath = `${sourceCwd}/notes/scratch.txt`;
+		const bundlePath = await bundleWithExtra(originalPath, "scratch");
+
+		await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		const targetCwd = sourceCwd.replace(sourceUserDir, targetHome);
+		const expected = path.join(targetCwd, "notes", "scratch.txt");
+		expect(fs.existsSync(expected)).toBe(true);
+		expect(fs.readFileSync(expected, "utf-8")).toBe("scratch");
+	});
+
+	it("anchors encoded-cwd temp paths to the target cwd", async () => {
+		const restoreTmp = fs.mkdtempSync(path.join(os.tmpdir(), "ct-enc-"));
+		const originalPath = path.join(restoreTmp, encodePath(sourceCwd), "job.output");
+		const bundlePath = await bundleWithExtra(originalPath, "OUT");
+
+		await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		const targetCwd = sourceCwd.replace(sourceUserDir, targetHome);
+		const expected = path.join(restoreTmp, encodePath(targetCwd), "job.output");
+		expect(fs.existsSync(expected)).toBe(true);
+		expect(fs.readFileSync(expected, "utf-8")).toBe("OUT");
+		fs.rmSync(restoreTmp, { recursive: true, force: true });
+	});
+
+	it("refuses to restore an extra file to a sensitive target", async () => {
+		const restoreTmp = fs.mkdtempSync(path.join(os.tmpdir(), "ct-restore-"));
+		const originalPath = path.join(restoreTmp, ".env");
+		const bundlePath = await bundleWithExtra(originalPath, "SECRET=1");
+
+		const r = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
+
+		expect(fs.existsSync(originalPath)).toBe(false);
+		expect(r.extraFilesInstalled?.find((e) => e.path === originalPath)?.action).toBe("skipped");
+		fs.rmSync(restoreTmp, { recursive: true, force: true });
 	});
 });

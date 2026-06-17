@@ -7,6 +7,7 @@ import { readConfig } from "../cli/config";
 import { CodeTeleportClient } from "../client/api";
 import { bundleSession } from "../core/bundle";
 import { scanLocalSessions } from "../core/local";
+import { formatBundleManifest } from "../core/manifest";
 import { detectCurrentSession } from "../core/session";
 import { unbundleSession } from "../core/unbundle";
 import { getAgent } from "../shared/agents";
@@ -35,7 +36,8 @@ export function registerTools(server: McpServer) {
 		{
 			description: [
 				"Push the current AI coding session to CodeTeleport cloud storage.",
-				"Bundles the full conversation (JSONL, subagents, file history, paste cache, shell snapshots)",
+				"Bundles the full conversation (JSONL, subagents, file history, paste cache, shell snapshots),",
+				"project memory, and any working/temp files you pass via includePaths,",
 				"and uploads it so you can resume on another machine.",
 				"If the session was previously pushed, it will be overwritten with the latest version.",
 				"",
@@ -47,6 +49,12 @@ export function registerTools(server: McpServer) {
 			inputSchema: z.object({
 				label: z.string().optional().describe("Human-readable name for the session"),
 				tags: z.array(z.string()).optional().describe("Tags for filtering"),
+				includePaths: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"Absolute paths of working/temp files this session created or depends on (e.g. /tmp/*.json). The agent supplies these because it knows what it touched.",
+					),
 			}),
 		},
 		safeToolHandler(async (args) => {
@@ -54,7 +62,11 @@ export function registerTools(server: McpServer) {
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
 			const session = detectCurrentSession();
-			const bundle = await bundleSession({ sessionId: session.sessionId, cwd: session.cwd });
+			const bundle = await bundleSession({
+				sessionId: session.sessionId,
+				cwd: session.cwd,
+				includePaths: args.includePaths as string[] | undefined,
+			});
 
 			const { uploadUrl, version } = await client.initiateUpload({
 				sessionId: bundle.sessionId,
@@ -75,18 +87,22 @@ export function registerTools(server: McpServer) {
 				fs.unlinkSync(bundle.bundlePath);
 			} catch {}
 
+			const summary = [
+				"Session teleported to CodeTeleport",
+				`  id      : ${bundle.sessionId}`,
+				`  version : ${version}`,
+				`  size    : ${(bundle.sizeBytes / 1024).toFixed(0)} KB`,
+				`  machine : ${config.deviceName}`,
+				`  messages: ${bundle.metadata.messageCount || "unknown"}`,
+			];
+			const manifest = formatBundleManifest(bundle);
+			if (manifest) summary.push("", manifest);
+
 			return {
 				content: [
 					{
 						type: "text" as const,
-						text: [
-							"Session teleported to CodeTeleport",
-							`  id      : ${bundle.sessionId}`,
-							`  version : ${version}`,
-							`  size    : ${(bundle.sizeBytes / 1024).toFixed(0)} KB`,
-							`  machine : ${config.deviceName}`,
-							`  messages: ${bundle.metadata.messageCount || "unknown"}`,
-						].join("\n"),
+						text: summary.join("\n"),
 					},
 				],
 			};

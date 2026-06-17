@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import * as tar from "tar";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
-import { detectHomeDir, encodePath, rewritePaths } from "./paths";
+import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
 
 export async function unbundleSession(options: UnbundleOptions): Promise<UnbundleResult> {
 	const { bundlePath } = options;
@@ -43,7 +43,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 			// Simple mode: just swap user dir
 			targetUserDir = options.targetUserDir ?? os.homedir();
 			targetClaudeDir = options.claudeDir ?? path.join(targetUserDir, ".claude");
-			targetCwd = sourceCwd.replace(sourceUserDir, targetUserDir);
+			targetCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
 		}
 
 		const targetCwdEncoded = encodePath(targetCwd);
@@ -54,7 +54,8 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// Two-pass path rewriting (matches scripts/unpack.sh):
 		// Pass 1: Replace sourceUserDir → targetUserDir (handles cross-user paths)
 		// Pass 2: Replace rewritten sourceCwd → targetCwd (handles project directory anchoring)
-		const rewrittenSourceCwd = sourceCwd.replace(sourceUserDir, targetUserDir);
+		// Use rewritePaths (all occurrences) so the anchor matches what pass 1 produces.
+		const rewrittenSourceCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
 
 		function twoPassRewrite(content: string): string {
 			let result = content;
@@ -115,14 +116,180 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 			}
 		}
 
+		// 7. Install project memory (Part A) with .md path rewriting
+		let memoryInstalled: UnbundleResult["memoryInstalled"];
+		const memorySrc = path.join(stagingDir, "memory");
+		if (fs.existsSync(memorySrc)) {
+			const memoryDst = path.join(targetProjDir, "memory");
+			fs.mkdirSync(memoryDst, { recursive: true });
+			memoryInstalled = installMemory(memorySrc, memoryDst, twoPassRewrite, options.memoryConflict ?? "merge");
+		}
+
+		// 8. Install extra working/temp files (Part B) at their rewritten target paths
+		let extraFilesInstalled: UnbundleResult["extraFilesInstalled"];
+		const manifestPath = path.join(stagingDir, "extra-files-manifest.json");
+		if (fs.existsSync(manifestPath)) {
+			extraFilesInstalled = [];
+			const conflict = options.extraFilesConflict ?? "overwrite";
+			// Also anchor encoded-cwd temp paths (e.g. /private/tmp/<encodedSourceCwd>/…) to the target.
+			const encodedSourceCwd = encodePath(sourceCwd);
+			const encodedTargetCwd = encodePath(targetCwd);
+			// Allowed restore roots (literal + realpath): target cwd/.claude subtrees and temp roots.
+			const restoreRoots = Array.from(
+				new Set([targetCwd, targetClaudeDir, os.tmpdir(), "/tmp", "/private/tmp"].flatMap((r) => [r, safeRealpath(r)])),
+			);
+			const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Array<{
+				stored: string;
+				originalPath: string;
+				sizeBytes?: number;
+				rewriteContent?: boolean;
+			}>;
+			for (const entry of manifest) {
+				const storedPath = path.join(stagingDir, "extra-files", entry.stored);
+				if (!fs.existsSync(storedPath)) continue;
+				let targetPath = twoPassRewrite(entry.originalPath);
+				if (encodedSourceCwd !== encodedTargetCwd) {
+					targetPath = rewritePaths(targetPath, encodedSourceCwd, encodedTargetCwd);
+				}
+				// Refuse to write outside the allowed roots or to a sensitive location (untrusted manifest).
+				if (!isRestoreTargetSafe(targetPath, restoreRoots, targetUserDir)) {
+					extraFilesInstalled.push({ path: targetPath, action: "skipped" });
+					continue;
+				}
+				const exists = fs.existsSync(targetPath);
+				if (exists && conflict === "skip") {
+					extraFilesInstalled.push({ path: targetPath, action: "skipped" });
+					continue;
+				}
+				fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+				if (entry.rewriteContent) {
+					fs.writeFileSync(targetPath, twoPassRewrite(fs.readFileSync(storedPath, "utf-8")));
+				} else {
+					fs.copyFileSync(storedPath, targetPath);
+				}
+				extraFilesInstalled.push({ path: targetPath, action: exists ? "overwritten" : "written" });
+			}
+		}
+
 		return {
 			sessionId,
 			installedTo: targetProjDir,
 			resumeCommand: `${options.resumeCommandPrefix || "claude --resume"} ${sessionId}`,
+			memoryInstalled,
+			extraFilesInstalled,
 		};
 	} finally {
 		fs.rmSync(stagingDir, { recursive: true, force: true });
 	}
+}
+
+export interface MemoryInstallResult {
+	written: string[];
+	merged: string[];
+	skipped: string[];
+}
+
+/**
+ * Whether an extra file from a (potentially untrusted) bundle may be written to `targetPath`.
+ * Requires the resolved path to sit inside one of `allowedRoots` and not be a sensitive location.
+ */
+export function isRestoreTargetSafe(targetPath: string, allowedRoots: string[], homeDir: string): boolean {
+	const resolved = path.resolve(targetPath);
+	if (isSensitivePath(resolved, resolved, homeDir)) return false;
+	return allowedRoots.some((root) => isUnder(resolved, root) || isUnder(resolved, safeRealpath(root)));
+}
+
+/**
+ * Union two texts line-by-line, preserving order and de-duplicating. A single trailing
+ * newline is preserved (and not treated as a blank content line) so merging real
+ * newline-terminated MEMORY.md files doesn't inject stray blank lines.
+ */
+function unionByLine(existing: string, incoming: string): string {
+	const endsWithNewline = existing.endsWith("\n") || incoming.endsWith("\n");
+	const toLines = (s: string): string[] => {
+		const lines = s.split("\n");
+		if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+		return lines;
+	};
+	const result = toLines(existing);
+	const seen = new Set(result);
+	for (const line of toLines(incoming)) {
+		if (!seen.has(line)) {
+			seen.add(line);
+			result.push(line);
+		}
+	}
+	return result.join("\n") + (endsWithNewline ? "\n" : "");
+}
+
+/**
+ * Install project memory (Part A) from `memorySrc` into `memoryDst`.
+ * `.md` contents are run through `rewrite` (they can embed absolute paths).
+ * Conflict policy:
+ *   - overwrite: replace target files
+ *   - skip: keep existing target files
+ *   - merge (default): union MEMORY.md by line; for any other file, write if
+ *     absent else skip (never clobber a hand-edited memory on the target).
+ */
+export function installMemory(
+	memorySrc: string,
+	memoryDst: string,
+	rewrite: (content: string) => string,
+	conflict: "merge" | "overwrite" | "skip",
+): MemoryInstallResult {
+	const written: string[] = [];
+	const merged: string[] = [];
+	const skipped: string[] = [];
+
+	const contentFor = (abs: string, isMd: boolean): string | Buffer =>
+		isMd ? rewrite(fs.readFileSync(abs, "utf-8")) : fs.readFileSync(abs);
+
+	const walk = (dir: string, relBase: string): void => {
+		for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+			const abs = path.join(dir, entry.name);
+			const rel = relBase ? path.join(relBase, entry.name) : entry.name;
+			if (entry.isDirectory()) {
+				walk(abs, rel);
+				continue;
+			}
+
+			const dstFile = path.join(memoryDst, rel);
+			const isMd = entry.name.toLowerCase().endsWith(".md");
+			const exists = fs.existsSync(dstFile);
+
+			const write = () => {
+				fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+				fs.writeFileSync(dstFile, contentFor(abs, isMd));
+			};
+
+			if (conflict === "overwrite") {
+				write();
+				written.push(rel);
+			} else if (conflict === "skip") {
+				if (exists) {
+					skipped.push(rel);
+				} else {
+					write();
+					written.push(rel);
+				}
+			} else if (entry.name === "MEMORY.md" && exists) {
+				// merge: union MEMORY.md by line
+				const incoming = isMd ? rewrite(fs.readFileSync(abs, "utf-8")) : fs.readFileSync(abs, "utf-8");
+				fs.mkdirSync(path.dirname(dstFile), { recursive: true });
+				fs.writeFileSync(dstFile, unionByLine(fs.readFileSync(dstFile, "utf-8"), incoming));
+				merged.push(rel);
+			} else if (exists) {
+				// merge: never clobber an existing non-MEMORY memory file
+				skipped.push(rel);
+			} else {
+				write();
+				written.push(rel);
+			}
+		}
+	};
+
+	walk(memorySrc, "");
+	return { written, merged, skipped };
 }
 
 function rewriteJsonlFilesInDir(dir: string, rewrite: (content: string) => string): void {
