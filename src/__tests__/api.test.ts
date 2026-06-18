@@ -136,6 +136,16 @@ describe("CodeTeleportClient", () => {
 			expect(url).toContain("tag=work");
 			expect(url).toContain("limit=5");
 		});
+
+		it("passes the agent filter as a query param", async () => {
+			mockFetch.mockResolvedValueOnce(mockResponse(200, { sessions: [], total: 0 }));
+
+			const client = new CodeTeleportClient({ apiUrl, token });
+			await client.listSessions({ agent: "codex" });
+
+			const url = mockFetch.mock.calls[0][0] as string;
+			expect(url).toContain("agent=codex");
+		});
 	});
 
 	describe("initiateUpload", () => {

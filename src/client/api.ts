@@ -134,13 +134,14 @@ export class CodeTeleportClient {
 		return this.request("POST", "/auth/token", { name, expiresIn }) as Promise<{ token: string; id: string }>;
 	}
 
-	async listSessions(params?: { machine?: string; tag?: string; limit?: number }): Promise<{
+	async listSessions(params?: { machine?: string; tag?: string; agent?: string; limit?: number }): Promise<{
 		sessions: SessionListItem[];
 		total: number;
 	}> {
 		const query = new URLSearchParams();
 		if (params?.machine) query.set("machine", params.machine);
 		if (params?.tag) query.set("tag", params.tag);
+		if (params?.agent) query.set("agent", params.agent);
 		if (params?.limit) query.set("limit", params.limit.toString());
 		const qs = query.toString();
 		return this.request("GET", `/sessions${qs ? `?${qs}` : ""}`) as Promise<{

@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
 import { unbundleSession } from "../../core/unbundle";
+import { DEFAULT_AGENT_ID } from "../../shared/constants";
 import { pickCloudSession } from "../cloud-session-picker";
 import { readConfig } from "../config";
 
@@ -24,6 +25,8 @@ export const pullCommand = new Command("pull")
 	.option("--version <n>", "Pull a specific version", Number)
 	.option("--target-dir <path>", "Anchor session at this directory (defaults to current directory)")
 	.option("--machine <name>", "Filter by source machine")
+	.option("--agent <id>", "List sessions for a specific agent (claude-code|codex|antigravity)")
+	.option("--all", "List sessions from all agents (overrides the default agent scope)")
 	.action(async (opts) => {
 		try {
 			const config = readConfig();
@@ -32,10 +35,14 @@ export const pullCommand = new Command("pull")
 			let sessionId: string;
 
 			if (opts.sessionId) {
+				// Explicit id pulls any session regardless of agent (restores natively).
 				sessionId = opts.sessionId;
 			} else {
+				// Picker defaults to the configured agent; --all / --agent widen it.
+				const agentFilter = opts.all ? undefined : (opts.agent ?? config.agent ?? DEFAULT_AGENT_ID);
 				const { sessions } = await client.listSessions({
 					machine: opts.machine,
+					agent: agentFilter,
 					limit: 20,
 				});
 

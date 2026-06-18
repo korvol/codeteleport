@@ -132,6 +132,12 @@ export function registerTools(server: McpServer) {
 				version: z.number().optional().describe("Pull a specific version (default: latest)"),
 				targetDir: z.string().optional().describe("Anchor session at this directory path"),
 				machine: z.string().optional().describe("Filter by source machine name"),
+				agent: z
+					.string()
+					.optional()
+					.describe(
+						'Filter the session list by agent (claude-code|codex|antigravity), or "all". Defaults to the configured agent. Pulling by sessionId works for any agent.',
+					),
 				limit: z.number().optional().describe("Max sessions to list"),
 			}),
 		},
@@ -169,22 +175,34 @@ export function registerTools(server: McpServer) {
 				}
 			}
 
+			const pullAgent = args.agent === "all" ? undefined : ((args.agent as string) ?? config.agent ?? DEFAULT_AGENT_ID);
 			const { sessions } = await client.listSessions({
 				machine: args.machine as string | undefined,
+				agent: pullAgent,
 				limit: (args.limit as number) || 10,
 			});
 
 			if (sessions.length === 0) {
-				return { content: [{ type: "text" as const, text: "No sessions found." }] };
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: pullAgent
+								? `No sessions found for agent "${pullAgent}". Pass agent:"all" to see every agent.`
+								: "No sessions found.",
+						},
+					],
+				};
 			}
 
-			const lines = ["Available sessions:", ""];
+			const lines = [pullAgent ? `Available sessions (${pullAgent}):` : "Available sessions (all agents):", ""];
 			for (let i = 0; i < sessions.length; i++) {
 				const s = sessions[i];
 				const date = new Date(s.createdAt).toLocaleString();
 				const machine = s.sourceMachine || "unknown";
+				const agent = s.metadata?.agentId || "claude-code";
 				const msgs = s.metadata?.messageCount ? ` ${s.metadata.messageCount} msgs` : "";
-				lines.push(`  ${i + 1}. ${s.id.slice(0, 8)}  ${machine}  ${s.sourceCwd}  ${date}${msgs}`);
+				lines.push(`  ${i + 1}. ${s.id.slice(0, 8)}  ${agent}  ${machine}  ${s.sourceCwd}  ${date}${msgs}`);
 			}
 			lines.push("", "Use teleport_pull with sessionId to pull a specific session.");
 
@@ -197,8 +215,8 @@ export function registerTools(server: McpServer) {
 		{
 			description: [
 				"List all sessions stored in CodeTeleport cloud.",
-				"Shows session ID, source machine, project path, date, size, message count, and tags.",
-				"Filter by machine name or tag.",
+				"Shows session ID, agent, source machine, project path, date, size, message count, and tags.",
+				'Defaults to the configured agent; pass agent to filter (or agent:"all" for every agent).',
 				"",
 				"Examples:",
 				'  "list my teleported sessions"',
@@ -208,6 +226,10 @@ export function registerTools(server: McpServer) {
 			inputSchema: z.object({
 				machine: z.string().optional().describe("Filter by machine name"),
 				tag: z.string().optional().describe("Filter by tag"),
+				agent: z
+					.string()
+					.optional()
+					.describe('Filter by agent (claude-code|codex|antigravity), or "all". Defaults to the configured agent.'),
 				limit: z.number().optional().describe("Max results"),
 			}),
 		},
@@ -215,25 +237,40 @@ export function registerTools(server: McpServer) {
 			const config = readConfig();
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
+			const listAgent = args.agent === "all" ? undefined : ((args.agent as string) ?? config.agent ?? DEFAULT_AGENT_ID);
 			const { sessions, total } = await client.listSessions({
 				machine: args.machine as string | undefined,
 				tag: args.tag as string | undefined,
+				agent: listAgent,
 				limit: (args.limit as number) || 20,
 			});
 
 			if (sessions.length === 0) {
-				return { content: [{ type: "text" as const, text: "No sessions found." }] };
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: listAgent
+								? `No sessions found for agent "${listAgent}". Pass agent:"all" to see every agent.`
+								: "No sessions found.",
+						},
+					],
+				};
 			}
 
-			const lines = [`Sessions (${sessions.length} of ${total}):`, ""];
+			const scope = listAgent ? ` for ${listAgent}` : " (all agents)";
+			const lines = [`Sessions${scope} (${sessions.length} of ${total}):`, ""];
 			for (const s of sessions) {
 				const date = new Date(s.createdAt).toLocaleString();
 				const machine = s.sourceMachine || "unknown";
+				const agent = s.metadata?.agentId || "claude-code";
 				const label = s.label ? ` "${s.label}"` : "";
 				const tags = s.tags.length > 0 ? ` [${s.tags.join(", ")}]` : "";
 				const msgs = s.metadata?.messageCount ? `${s.metadata.messageCount} msgs` : "";
 				const size = `${(s.sizeBytes / 1024).toFixed(0)} KB`;
-				lines.push(`  ${s.id.slice(0, 8)}  ${machine}  ${s.sourceCwd}  ${date}  ${size}  ${msgs}${label}${tags}`);
+				lines.push(
+					`  ${s.id.slice(0, 8)}  ${agent}  ${machine}  ${s.sourceCwd}  ${date}  ${size}  ${msgs}${label}${tags}`,
+				);
 			}
 
 			return { content: [{ type: "text" as const, text: lines.join("\n") }] };

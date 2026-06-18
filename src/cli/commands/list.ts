@@ -27,6 +27,8 @@ export const listCommand = new Command("list")
 	.option("--json", "Output as JSON")
 	.option("--machine <name>", "Filter by source machine (cloud only)")
 	.option("--tag <tag>", "Filter by tag (cloud only)")
+	.option("--agent <id>", "Filter cloud sessions by agent (claude-code|codex|antigravity)")
+	.option("--all", "Show cloud sessions from all agents (overrides the default agent scope)")
 	.option("--limit <n>", "Max results (cloud only)", "20")
 	.action(async (opts) => {
 		try {
@@ -148,18 +150,33 @@ async function listLocal(opts: { push?: boolean; json?: boolean }) {
 	console.log(`\n${pushed} session${pushed !== 1 ? "s" : ""} pushed to cloud.`);
 }
 
-async function listCloud(opts: { machine?: string; tag?: string; limit?: string; json?: boolean }) {
+async function listCloud(opts: {
+	machine?: string;
+	tag?: string;
+	agent?: string;
+	all?: boolean;
+	limit?: string;
+	json?: boolean;
+}) {
 	const config = readConfig();
 	const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
+
+	// Default scope: the configured agent. --all clears it; --agent <id> overrides.
+	const agentFilter = opts.all ? undefined : (opts.agent ?? config.agent ?? DEFAULT_AGENT_ID);
 
 	const { sessions, total } = await client.listSessions({
 		machine: opts.machine,
 		tag: opts.tag,
+		agent: agentFilter,
 		limit: Number.parseInt(opts.limit || "20", 10),
 	});
 
 	if (sessions.length === 0) {
-		console.log("No cloud sessions found.");
+		console.log(
+			agentFilter
+				? `No cloud sessions found for agent "${agentFilter}". Use --all to see other agents, or --agent <id> to pick one.`
+				: "No cloud sessions found.",
+		);
 		return;
 	}
 
@@ -168,8 +185,12 @@ async function listCloud(opts: { machine?: string; tag?: string; limit?: string;
 		return;
 	}
 
-	console.log(`\nCloud sessions (${sessions.length} of ${total}):\n`);
+	const scope = agentFilter ? ` for ${agentFilter}` : "";
+	console.log(`\nCloud sessions${scope} (${sessions.length} of ${total}):\n`);
 	for (let i = 0; i < sessions.length; i++) {
 		console.log(formatCloudSessionRow(i + 1, sessions[i]));
+	}
+	if (agentFilter) {
+		console.log("\n(showing only your configured agent — use --all for every agent, or --agent <id>)");
 	}
 }

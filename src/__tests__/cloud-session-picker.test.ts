@@ -128,4 +128,16 @@ describe("formatCloudSessionRow", () => {
 		const row = formatCloudSessionRow(1, session);
 		expect(row).not.toContain("v1");
 	});
+
+	it("shows the agent the session was created with", () => {
+		const codex = makeCloudSession({ metadata: { messageCount: 5, projectName: "p", agentId: "codex" } });
+		expect(formatCloudSessionRow(1, codex)).toContain("codex");
+		const agy = makeCloudSession({ metadata: { messageCount: 5, projectName: "p", agentId: "antigravity" } });
+		expect(formatCloudSessionRow(1, agy)).toContain("antigravity");
+	});
+
+	it("labels sessions without an agentId as claude-code (legacy)", () => {
+		const legacy = makeCloudSession({ metadata: { messageCount: 5, projectName: "p" } });
+		expect(formatCloudSessionRow(1, legacy)).toContain("claude-code");
+	});
 });

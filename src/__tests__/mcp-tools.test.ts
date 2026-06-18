@@ -228,10 +228,38 @@ describe("MCP Tools", () => {
 
 			const result = await callTool("teleport_list", {});
 
-			expect(result.content[0].text).toContain("Sessions (1 of 1)");
+			// Defaults to the configured agent (claude-code); legacy metadata w/o agentId shows as claude-code.
+			expect(result.content[0].text).toContain("Sessions for claude-code (1 of 1)");
 			expect(result.content[0].text).toContain("sess-bbb");
 			expect(result.content[0].text).toContain("my session");
 			expect(result.content[0].text).toContain("work");
+		});
+
+		it("labels the row with the session's agent and scopes by agent param", async () => {
+			mockFetch.mockResolvedValueOnce(
+				mockResponse(200, {
+					sessions: [
+						{
+							id: "sess-codex",
+							label: null,
+							sourceMachine: "macbook",
+							sourceCwd: "/Users/alice/proj",
+							sizeBytes: 51200,
+							createdAt: "2026-03-25T07:00:00Z",
+							metadata: { messageCount: 7, agentId: "codex" },
+							tags: [],
+						},
+					],
+					total: 1,
+				}),
+			);
+
+			const result = await callTool("teleport_list", { agent: "codex" });
+
+			const url = mockFetch.mock.calls[0][0] as string;
+			expect(url).toContain("agent=codex");
+			expect(result.content[0].text).toContain("Sessions for codex");
+			expect(result.content[0].text).toContain("codex");
 		});
 
 		it("returns empty message when no sessions", async () => {

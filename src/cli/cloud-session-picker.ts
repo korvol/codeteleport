@@ -54,10 +54,12 @@ export function formatCloudSessionRow(index: number, session: SessionListItem): 
 	const id = session.id.slice(0, 8);
 	const project = session.metadata?.projectName || session.sourceCwd.split("/").pop() || "unknown";
 	const machine = session.sourceMachine || "unknown";
+	// Which agent created this session (legacy bundles with no agentId are claude-code).
+	const agent = session.metadata?.agentId || "claude-code";
 	const msgs = session.metadata?.messageCount ? `${String(session.metadata.messageCount).padStart(6)} msgs` : "";
 	const size = formatSize(session.sizeBytes).padStart(8);
 	const label = session.label ? `  [${session.label}]` : "";
 	const ver = session.versionCount > 1 ? `  v${session.currentVersion} (${session.versionCount})` : "";
 
-	return `  ${index})  ${id}  ${project}  ${machine}  ${msgs}  ${size}${ver}${label}`;
+	return `  ${index})  ${id}  ${agent}  ${project}  ${machine}  ${msgs}  ${size}${ver}${label}`;
 }
