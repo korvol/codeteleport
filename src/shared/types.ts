@@ -27,6 +27,8 @@ export interface BundleOptions {
 	outputDir?: string;
 	claudeDir?: string; // override ~/.claude for testing
 	sourceUserDir?: string; // override os.homedir() for testing
+	/** Which agent produced the session. Defaults to "claude-code". Recorded in the bundle. */
+	agentId?: string;
 	/** Absolute paths of working/temp files the session created or depends on (e.g. /tmp/*.json). */
 	includePaths?: string[];
 }
@@ -80,6 +82,12 @@ export interface SessionMetadata {
 	memoryFileCount?: number;
 	extraFileCount?: number;
 	extraFilesIncluded?: string[];
+	/** Which agent produced the session (for cloud listing). */
+	agentId?: string;
+	// ── Codex-specific ──
+	codexModel?: string;
+	codexCliVersion?: string;
+	tokenTotal?: number;
 }
 
 export interface Config {

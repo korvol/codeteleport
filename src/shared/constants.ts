@@ -7,6 +7,28 @@ export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 export const API_URL = "https://api.codeteleport.com/v1";
 
+// ── Multi-agent bundling ──
+
+/** Agent a bundle is assumed to come from when meta.json predates the agentId field. */
+export const DEFAULT_AGENT_ID = "claude-code";
+
+/** Bundle envelope version. Bumped to 2 when meta.json gained agentId. */
+export const BUNDLE_FORMAT_VERSION = 2;
+
+/**
+ * Agent ids the bundler/unbundler can currently handle. Grows as adapters land
+ * (claude-code today; codex next). Kept separate from the agent *registry*
+ * (shared/agents.ts) so a registry entry can exist before its adapter does.
+ */
+export const SUPPORTED_AGENT_IDS = ["claude-code"] as const;
+
+/** Throw a consistent error for an agent id without a bundle/unbundle adapter. */
+export function assertSupportedAgent(agentId: string): void {
+	if (!(SUPPORTED_AGENT_IDS as readonly string[]).includes(agentId)) {
+		throw new Error(`Unknown agent: ${agentId}. Supported: ${SUPPORTED_AGENT_IDS.join(", ")}`);
+	}
+}
+
 // ── Extra working/temp file bundling (see spec: bundle memory + extra files) ──
 
 /** Per-file size cap for bundled extra files. Files larger than this are skipped. */

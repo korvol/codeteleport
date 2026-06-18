@@ -3,13 +3,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as tar from "tar";
-import { CLAUDE_DIR, EXTRA_FILE_MAX_BYTES, EXTRA_TOTAL_MAX_BYTES } from "../shared/constants";
+import {
+	BUNDLE_FORMAT_VERSION,
+	CLAUDE_DIR,
+	DEFAULT_AGENT_ID,
+	EXTRA_FILE_MAX_BYTES,
+	EXTRA_TOTAL_MAX_BYTES,
+	assertSupportedAgent,
+} from "../shared/constants";
 import type { BundleOptions, BundleResult } from "../shared/types";
 import { encodePath, isSensitivePath, isUnder, safeRealpath } from "./paths";
 import { scanSession } from "./scanner";
 
 export async function bundleSession(options: BundleOptions): Promise<BundleResult> {
 	const { sessionId, cwd } = options;
+	const agentId = options.agentId ?? DEFAULT_AGENT_ID;
+	assertSupportedAgent(agentId);
 	const outputDir = options.outputDir ?? os.tmpdir();
 	const claudeDir = options.claudeDir ?? CLAUDE_DIR;
 	const sourceUserDir = options.sourceUserDir ?? os.homedir();
@@ -28,8 +37,9 @@ export async function bundleSession(options: BundleOptions): Promise<BundleResul
 		// 1. Scan JSONL for assets + metadata
 		const { assets, metadata } = await scanSession(jsonlPath);
 
-		// 2. Write meta.json
-		const meta = { sessionId, sourceCwd: cwd, sourceUserDir };
+		// 2. Write meta.json — self-describing: agentId lets pull pick the right
+		// adapter without trusting the puller's local config.
+		const meta = { sessionId, sourceCwd: cwd, sourceUserDir, agentId, formatVersion: BUNDLE_FORMAT_VERSION };
 		fs.writeFileSync(path.join(stagingDir, "meta.json"), JSON.stringify(meta, null, 2));
 
 		// 3. Copy session JSONL

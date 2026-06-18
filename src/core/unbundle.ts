@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as tar from "tar";
+import { DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
 import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
 
@@ -20,6 +21,11 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		}
 		const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
 		const { sessionId, sourceCwd, sourceUserDir } = meta;
+
+		// Dispatch on the bundle's own agentId (not the puller's config). Bundles
+		// made before this field existed are treated as claude-code.
+		const agentId = meta.agentId ?? DEFAULT_AGENT_ID;
+		assertSupportedAgent(agentId);
 
 		// Determine target paths
 		const targetDir = options.targetDir;
