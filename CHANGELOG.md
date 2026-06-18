@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0 (2026-06-18)
+
+- **Convert to Antigravity** — `codeteleport pull <id> --as antigravity` (and the `teleport_pull` MCP `as` option) now converts a pulled session into an Antigravity conversation, completing the conversion matrix: **any agent converts to any other** (Claude Code, Codex, and Antigravity, in every direction). Antigravity's session is a protobuf-backed SQLite database, which the converter synthesizes from the transcript. As with all conversions this is transcript-level: your prompts and the agent's replies carry over, but file history, exact tool-call fidelity, and agent-specific sidecar state do not (the original tool steps and per-call metadata are not reconstructed). Pulling without `--as` still restores natively with full fidelity.
+
 ## 0.5.0 (2026-06-18)
 
 - **Cross-agent conversion** — `codeteleport pull <id> --as <claude-code|codex>` converts a pulled session into another agent's format on install (the `teleport_pull` MCP tool gains the same `as` option). Supported directions: Claude Code ↔ Codex, and Antigravity → Claude Code / Codex. Pulling without `--as` restores natively as before. Conversion is transcript-level: the conversation history carries over, but file history, exact tool-call fidelity, and agent-specific sidecars do not. Antigravity cannot be a conversion *target* (its session format can't be synthesized), only a source.
