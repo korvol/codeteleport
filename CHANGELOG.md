@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (2026-06-18)
+
+- **Multi-agent support** — CodeTeleport now teleports sessions for three AI coding agents: **Claude Code** (default), **Codex** (OpenAI), and **Antigravity** (Google). Choose your agent with `codeteleport config set agent <claude-code|codex|antigravity>` or interactively via `codeteleport setup`.
+- **Self-describing bundles** — every bundle records the agent that created it (`agentId` in `meta.json`), so `pull` restores into the correct agent's native location and prints the right resume command regardless of the target machine's configured agent. Legacy bundles with no `agentId` are treated as Claude Code.
+- **Codex** — bundles the rollout transcript plus the thread-inventory row from `~/.codex/state_5.sqlite`; on `pull` the transcript is written and the thread row is upserted so `codex resume <id>` finds the session (if `state_5.sqlite` doesn't exist yet, run Codex once and re-pull). Modified-file auto-detection covers `apply_patch` edits; use `--include` for shell-created files. Shell snapshots are excluded by default.
+- **Antigravity** — bundles the SQLite conversation DB (`~/.gemini/antigravity-cli/conversations/<id>.db`) and the `brain/<id>/` folder; on `pull`, absolute paths embedded in the protobuf BLOBs are rewritten (length-prefix-aware, across every blob column) alongside the brain text files. Resume with `agy --conversation <id>`.
+- **Cloud sessions are scoped by agent** — `list` and `pull` default to your configured agent and label each cloud session with its agent; use `--agent <id>` to view another or `--all` to see every agent. The `teleport_list`/`teleport_pull` MCP tools accept the same `agent` filter. Pulling a specific session by ID still works across agents.
+- **Requires Node.js >= 22.5.0** — the CLI uses the built-in `node:sqlite` module to read and write Codex/Antigravity session state.
+
 ## 0.3.0 (2026-06-17)
 
 - **Project memory bundling** — `push` now bundles project memory (`~/.claude/projects/<cwd>/memory/`) and `pull` restores it under the target project. The default `merge` policy unions `MEMORY.md` by line and never clobbers other hand-edited memory files (`overwrite` / `skip` also available).
