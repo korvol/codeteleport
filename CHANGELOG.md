@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 (2026-06-18)
+
+- **Cross-agent conversion** — `codeteleport pull <id> --as <claude-code|codex>` converts a pulled session into another agent's format on install (the `teleport_pull` MCP tool gains the same `as` option). Supported directions: Claude Code ↔ Codex, and Antigravity → Claude Code / Codex. Pulling without `--as` restores natively as before. Conversion is transcript-level: the conversation history carries over, but file history, exact tool-call fidelity, and agent-specific sidecars do not. Antigravity cannot be a conversion *target* (its session format can't be synthesized), only a source.
+
 ## 0.4.0 (2026-06-18)
 
 - **Multi-agent support** — CodeTeleport now teleports sessions for three AI coding agents: **Claude Code** (default), **Codex** (OpenAI), and **Antigravity** (Google). Choose your agent with `codeteleport config set agent <claude-code|codex|antigravity>` or interactively via `codeteleport setup`.
