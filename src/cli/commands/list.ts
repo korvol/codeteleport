@@ -1,8 +1,9 @@
 import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
+import { scanLocalSessionsForAgent } from "../../core/agents/dispatch";
 import { bundleSession } from "../../core/bundle";
-import { scanLocalSessions } from "../../core/local";
+import { DEFAULT_AGENT_ID } from "../../shared/constants";
 import { formatCloudSessionRow } from "../cloud-session-picker";
 import { readConfig } from "../config";
 import { parseSessionSelection, resolveListMode } from "../list-mode";
@@ -42,8 +43,17 @@ export const listCommand = new Command("list")
 		}
 	});
 
+function configuredAgent(): string {
+	try {
+		return readConfig().agent ?? DEFAULT_AGENT_ID;
+	} catch {
+		return DEFAULT_AGENT_ID;
+	}
+}
+
 async function listLocal(opts: { push?: boolean; json?: boolean }) {
-	const sessions = scanLocalSessions();
+	const agentId = configuredAgent();
+	const sessions = scanLocalSessionsForAgent(agentId);
 
 	if (sessions.length === 0) {
 		console.log("No local AI coding sessions found.");
@@ -101,6 +111,7 @@ async function listLocal(opts: { push?: boolean; json?: boolean }) {
 			const bundle = await bundleSession({
 				sessionId: session.sessionId,
 				cwd: session.projectPath,
+				agentId: configuredAgent(),
 			});
 
 			const { uploadUrl } = await client.initiateUpload({

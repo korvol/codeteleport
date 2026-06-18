@@ -1,10 +1,10 @@
 import readline from "node:readline";
 import { Command } from "commander";
 import { CodeTeleportClient } from "../../client/api";
+import { detectCurrentSessionForAgent, scanProjectSessionsForAgent } from "../../core/agents/dispatch";
 import { bundleSession } from "../../core/bundle";
-import { scanProjectSessions } from "../../core/local";
 import { EXTRA_FILES_CLI_HINT, formatBundleManifest, parseIncludePaths } from "../../core/manifest";
-import { detectCurrentSession } from "../../core/session";
+import { DEFAULT_AGENT_ID } from "../../shared/constants";
 import { readConfig } from "../config";
 import { formatSessionRow, pickSession } from "../session-picker";
 
@@ -32,6 +32,7 @@ export const pushCommand = new Command("push")
 	.option("--silent", "Suppress output (for auto-sync hooks)")
 	.action(async (opts) => {
 		const config = readConfig();
+		const agentId = config.agent ?? DEFAULT_AGENT_ID;
 		const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 		const log = opts.silent ? () => {} : console.log;
 
@@ -40,23 +41,23 @@ export const pushCommand = new Command("push")
 
 		if (opts.sessionId) {
 			// Explicit session ID — find it in local data
-			const sessions = scanProjectSessions(process.cwd());
+			const sessions = scanProjectSessionsForAgent(agentId, process.cwd());
 			const match = sessions.find((s) => s.sessionId === opts.sessionId || s.sessionId.startsWith(opts.sessionId));
 			if (!match) {
-				console.error(`Session ${opts.sessionId} not found in local Claude Code data`);
+				console.error(`Session ${opts.sessionId} not found in local data`);
 				process.exit(1);
 			}
 			sessionId = match.sessionId;
 			cwd = match.projectPath;
 		} else {
-			// Try process tree detection first (running inside Claude Code)
+			// Try automatic detection first (Claude process tree / Codex history)
 			try {
-				const session = detectCurrentSession();
+				const session = detectCurrentSessionForAgent(agentId, process.cwd());
 				sessionId = session.sessionId;
 				cwd = session.cwd;
 			} catch {
 				// Fall back to scanning current directory for sessions
-				const sessions = scanProjectSessions(process.cwd());
+				const sessions = scanProjectSessionsForAgent(agentId, process.cwd());
 
 				if (sessions.length === 0) {
 					console.error("No coding sessions found for this directory.");
@@ -76,7 +77,7 @@ export const pushCommand = new Command("push")
 		}
 
 		// Show session summary before pushing
-		const sessions = scanProjectSessions(cwd);
+		const sessions = scanProjectSessionsForAgent(agentId, cwd);
 		const current = sessions.find((s) => s.sessionId === sessionId);
 		if (current) {
 			log("");
@@ -89,7 +90,7 @@ export const pushCommand = new Command("push")
 
 		// Bundle
 		const includePaths = parseIncludePaths((opts.include as string[]) ?? []);
-		const bundle = await bundleSession({ sessionId, cwd, includePaths });
+		const bundle = await bundleSession({ sessionId, cwd, includePaths, agentId });
 
 		log(`  size: ${(bundle.sizeBytes / 1024).toFixed(0)} KB`);
 

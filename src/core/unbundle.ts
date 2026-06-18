@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as tar from "tar";
+import { getAgent } from "../shared/agents";
 import { DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
 import { unbundleCodexSession } from "./agents/codex/unbundle";
@@ -27,8 +28,10 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// made before this field existed are treated as claude-code.
 		const agentId = meta.agentId ?? DEFAULT_AGENT_ID;
 		assertSupportedAgent(agentId);
+		// Resume command comes from the bundle's agent, not the puller's config.
+		const resumePrefix = options.resumeCommandPrefix ?? getAgent(agentId).resumeCommand;
 		if (agentId === "codex") {
-			return unbundleCodexSession({ stagingDir, meta, options });
+			return unbundleCodexSession({ stagingDir, meta, options: { ...options, resumeCommandPrefix: resumePrefix } });
 		}
 
 		// Determine target paths
@@ -184,7 +187,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		return {
 			sessionId,
 			installedTo: targetProjDir,
-			resumeCommand: `${options.resumeCommandPrefix || "claude --resume"} ${sessionId}`,
+			resumeCommand: `${resumePrefix} ${sessionId}`,
 			memoryInstalled,
 			extraFilesInstalled,
 		};

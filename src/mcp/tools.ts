@@ -5,12 +5,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import { readConfig } from "../cli/config";
 import { CodeTeleportClient } from "../client/api";
+import { detectCurrentSessionForAgent, scanLocalSessionsForAgent } from "../core/agents/dispatch";
 import { bundleSession } from "../core/bundle";
-import { scanLocalSessions } from "../core/local";
 import { formatBundleManifest } from "../core/manifest";
-import { detectCurrentSession } from "../core/session";
 import { unbundleSession } from "../core/unbundle";
-import { getAgent } from "../shared/agents";
+import { DEFAULT_AGENT_ID } from "../shared/constants";
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
@@ -59,13 +58,15 @@ export function registerTools(server: McpServer) {
 		},
 		safeToolHandler(async (args) => {
 			const config = readConfig();
+			const agentId = config.agent ?? DEFAULT_AGENT_ID;
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
-			const session = detectCurrentSession();
+			const session = detectCurrentSessionForAgent(agentId);
 			const bundle = await bundleSession({
 				sessionId: session.sessionId,
 				cwd: session.cwd,
 				includePaths: args.includePaths as string[] | undefined,
+				agentId,
 			});
 
 			const { uploadUrl, version } = await client.initiateUpload({
@@ -136,7 +137,6 @@ export function registerTools(server: McpServer) {
 		},
 		safeToolHandler(async (args) => {
 			const config = readConfig();
-			const agent = getAgent(config.agent);
 			const client = new CodeTeleportClient({ apiUrl: config.apiUrl, token: config.token });
 
 			if (args.sessionId) {
@@ -148,10 +148,10 @@ export function registerTools(server: McpServer) {
 
 				try {
 					await client.downloadBundle(downloadUrl, tmpFile);
+					// Resume command is derived from the bundle's own agent inside unbundle.
 					const result = await unbundleSession({
 						bundlePath: tmpFile,
 						targetDir: args.targetDir as string | undefined,
-						resumeCommandPrefix: agent.resumeCommand,
 					});
 
 					return {
@@ -299,7 +299,8 @@ export function registerTools(server: McpServer) {
 			].join("\n"),
 		},
 		safeToolHandler(async () => {
-			const sessions = scanLocalSessions();
+			const config = readConfig();
+			const sessions = scanLocalSessionsForAgent(config.agent ?? DEFAULT_AGENT_ID);
 
 			if (sessions.length === 0) {
 				return { content: [{ type: "text" as const, text: "No local AI coding sessions found." }] };

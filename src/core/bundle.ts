@@ -153,6 +153,7 @@ export async function bundleSession(options: BundleOptions): Promise<BundleResul
 			checksum: `sha256:${checksum}`,
 			metadata: {
 				...metadata,
+				agentId,
 				projectName,
 				jsonlSizeBytes,
 				subagentCount,
