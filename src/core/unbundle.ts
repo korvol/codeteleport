@@ -5,6 +5,7 @@ import * as tar from "tar";
 import { getAgent } from "../shared/agents";
 import { DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
+import { unbundleAntigravitySession } from "./agents/antigravity/unbundle";
 import { unbundleCodexSession } from "./agents/codex/unbundle";
 import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
 
@@ -32,6 +33,13 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		const resumePrefix = options.resumeCommandPrefix ?? getAgent(agentId).resumeCommand;
 		if (agentId === "codex") {
 			return unbundleCodexSession({ stagingDir, meta, options: { ...options, resumeCommandPrefix: resumePrefix } });
+		}
+		if (agentId === "antigravity") {
+			return unbundleAntigravitySession({
+				stagingDir,
+				meta,
+				options: { ...options, resumeCommandPrefix: resumePrefix },
+			});
 		}
 
 		// Determine target paths

@@ -20,10 +20,13 @@ export const BUNDLE_FORMAT_VERSION = 2;
  * (claude-code today; codex next). Kept separate from the agent *registry*
  * (shared/agents.ts) so a registry entry can exist before its adapter does.
  */
-export const SUPPORTED_AGENT_IDS = ["claude-code", "codex"] as const;
+export const SUPPORTED_AGENT_IDS = ["claude-code", "codex", "antigravity"] as const;
 
 /** Codex home directory (~/.codex), overridable for tests. */
 export const CODEX_DIR = path.join(os.homedir(), ".codex");
+
+/** Antigravity home directory (~/.gemini/antigravity-cli), overridable for tests. */
+export const ANTIGRAVITY_DIR = path.join(os.homedir(), ".gemini", "antigravity-cli");
 
 /** Throw a consistent error for an agent id without a bundle/unbundle adapter. */
 export function assertSupportedAgent(agentId: string): void {

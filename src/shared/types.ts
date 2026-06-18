@@ -27,6 +27,7 @@ export interface BundleOptions {
 	outputDir?: string;
 	claudeDir?: string; // override ~/.claude for testing
 	codexDir?: string; // override ~/.codex for testing
+	geminiDir?: string; // override ~/.gemini/antigravity-cli for testing
 	sourceUserDir?: string; // override os.homedir() for testing
 	/** Which agent produced the session. Defaults to "claude-code". Recorded in the bundle. */
 	agentId?: string;
@@ -52,6 +53,7 @@ export interface UnbundleOptions {
 	targetUserDir?: string; // override — auto-detected from targetDir if not provided
 	claudeDir?: string; // override ~/.claude for testing
 	codexDir?: string; // override ~/.codex for testing
+	geminiDir?: string; // override ~/.gemini/antigravity-cli for testing
 	resumeCommandPrefix?: string; // override "claude --resume" — from agent config
 	/** How to handle pre-existing memory files on the target. Default "merge". */
 	memoryConflict?: "merge" | "overwrite" | "skip";

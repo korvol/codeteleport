@@ -30,6 +30,15 @@ const AGENTS: Record<string, AgentConfig> = {
 		detectProcess: "codex",
 		mcpAddCommand: "codex mcp add codeteleport -- codeteleport-mcp",
 	},
+	antigravity: {
+		id: "antigravity",
+		name: "Antigravity",
+		sessionDir: path.join(os.homedir(), ".gemini", "antigravity-cli", "conversations"),
+		sessionFilePattern: "*.db",
+		resumeCommand: "agy --conversation",
+		detectProcess: "agy",
+		mcpAddCommand: "agy mcp add codeteleport -- codeteleport-mcp",
+	},
 };
 
 export function getAgent(id?: string): AgentConfig {

@@ -3,6 +3,8 @@ import type { SessionInfo } from "../../shared/types";
 import type { LocalSession } from "../local";
 import { scanLocalSessions, scanProjectSessions } from "../local";
 import { detectCurrentSession } from "../session";
+import { detectAntigravityCurrentSession } from "./antigravity/detect";
+import { scanAntigravityLocalSessions, scanAntigravityProjectSessions } from "./antigravity/local";
 import { detectCodexCurrentSession } from "./codex/detect";
 import { scanCodexLocalSessions, scanCodexProjectSessions } from "./codex/local";
 
@@ -10,12 +12,14 @@ import { scanCodexLocalSessions, scanCodexProjectSessions } from "./codex/local"
 export interface AgentDirs {
 	claudeDir?: string;
 	codexDir?: string;
+	geminiDir?: string;
 }
 
 /** List all local sessions for the configured agent. */
 export function scanLocalSessionsForAgent(agentId: string = DEFAULT_AGENT_ID, dirs: AgentDirs = {}): LocalSession[] {
 	assertSupportedAgent(agentId);
 	if (agentId === "codex") return scanCodexLocalSessions(dirs.codexDir);
+	if (agentId === "antigravity") return scanAntigravityLocalSessions(dirs.geminiDir);
 	return scanLocalSessions(dirs.claudeDir);
 }
 
@@ -27,6 +31,7 @@ export function scanProjectSessionsForAgent(
 ): LocalSession[] {
 	assertSupportedAgent(agentId);
 	if (agentId === "codex") return scanCodexProjectSessions(projectPath, dirs.codexDir);
+	if (agentId === "antigravity") return scanAntigravityProjectSessions(projectPath, dirs.geminiDir);
 	return scanProjectSessions(projectPath, dirs.claudeDir);
 }
 
@@ -42,5 +47,6 @@ export function detectCurrentSessionForAgent(
 ): SessionInfo {
 	assertSupportedAgent(agentId);
 	if (agentId === "codex") return detectCodexCurrentSession(cwd, dirs.codexDir);
+	if (agentId === "antigravity") return detectAntigravityCurrentSession(cwd, dirs.geminiDir);
 	return detectCurrentSession(undefined, dirs.claudeDir);
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import * as tar from "tar";
 import { BUNDLE_FORMAT_VERSION, CLAUDE_DIR, DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { BundleOptions, BundleResult } from "../shared/types";
+import { bundleAntigravitySession } from "./agents/antigravity/bundle";
 import { bundleCodexSession } from "./agents/codex/bundle";
 import { collectExtraFiles } from "./extra-files";
 import { countFiles, sha256File } from "./fsutil";
@@ -19,6 +20,7 @@ export async function bundleSession(options: BundleOptions): Promise<BundleResul
 	const agentId = options.agentId ?? DEFAULT_AGENT_ID;
 	assertSupportedAgent(agentId);
 	if (agentId === "codex") return bundleCodexSession(options);
+	if (agentId === "antigravity") return bundleAntigravitySession(options);
 	const outputDir = options.outputDir ?? os.tmpdir();
 	const claudeDir = options.claudeDir ?? CLAUDE_DIR;
 	const sourceUserDir = options.sourceUserDir ?? os.homedir();
