@@ -27,6 +27,7 @@ export const pullCommand = new Command("pull")
 	.option("--machine <name>", "Filter by source machine")
 	.option("--agent <id>", "List sessions for a specific agent (claude-code|codex|antigravity)")
 	.option("--all", "List sessions from all agents (overrides the default agent scope)")
+	.option("--as <id>", "Convert the session into another agent's format on install (claude-code|codex)")
 	.action(async (opts) => {
 		try {
 			const config = readConfig();
@@ -64,19 +65,23 @@ export const pullCommand = new Command("pull")
 			try {
 				await client.downloadBundle(downloadUrl, tmpFile);
 
-				console.log("Installing...");
+				console.log(opts.as ? `Installing (converting to ${opts.as})...` : "Installing...");
 				// Resume command is derived from the bundle's own agent inside unbundle.
 				const result = await unbundleSession({
 					bundlePath: tmpFile,
 					targetDir,
+					convertTo: opts.as,
 				});
 
 				console.log("");
-				console.log("Session pulled");
+				console.log(opts.as ? `Session pulled & converted to ${opts.as}` : "Session pulled");
 				console.log(`  id      : ${result.sessionId}`);
 				console.log(`  version : ${version}`);
 				console.log(`  from    : ${session.sourceMachine || "unknown"}`);
 				console.log(`  to      : ${result.installedTo}`);
+				if (opts.as) {
+					console.log("  note    : converted sessions are transcript-only (no file history / tool state)");
+				}
 				console.log("");
 				console.log(`Resume with: ${result.resumeCommand}`);
 			} finally {

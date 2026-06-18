@@ -7,6 +7,7 @@ import { DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
 import { unbundleAntigravitySession } from "./agents/antigravity/unbundle";
 import { unbundleCodexSession } from "./agents/codex/unbundle";
+import { convertInStaging } from "./conversion/convert";
 import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
 
 export async function unbundleSession(options: UnbundleOptions): Promise<UnbundleResult> {
@@ -29,6 +30,23 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// made before this field existed are treated as claude-code.
 		const agentId = meta.agentId ?? DEFAULT_AGENT_ID;
 		assertSupportedAgent(agentId);
+
+		// Cross-agent conversion (Model A): convert the pulled session into another
+		// agent's format on install, instead of restoring it natively. Skipped when
+		// convertTo equals the bundle's own agent.
+		if (options.convertTo && options.convertTo !== agentId) {
+			const targetUserDir = options.targetUserDir ?? os.homedir();
+			const targetCwd = options.targetDir ?? rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+			return convertInStaging({
+				sourceAgentId: agentId,
+				targetAgentId: options.convertTo,
+				stagingDir,
+				targetCwd,
+				claudeDir: options.claudeDir ?? path.join(targetUserDir, ".claude"),
+				codexDir: options.codexDir ?? path.join(targetUserDir, ".codex"),
+			});
+		}
+
 		// Resume command comes from the bundle's agent, not the puller's config.
 		const resumePrefix = options.resumeCommandPrefix ?? getAgent(agentId).resumeCommand;
 		if (agentId === "codex") {

@@ -59,6 +59,8 @@ export interface UnbundleOptions {
 	memoryConflict?: "merge" | "overwrite" | "skip";
 	/** How to handle pre-existing extra files on the target. Default "overwrite". */
 	extraFilesConflict?: "overwrite" | "skip";
+	/** Convert the session into this agent's format on install (claude-code|codex). Ignored if it equals the bundle's agent. */
+	convertTo?: string;
 }
 
 export interface ScannedAssets {

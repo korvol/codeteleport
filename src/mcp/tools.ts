@@ -138,6 +138,12 @@ export function registerTools(server: McpServer) {
 					.describe(
 						'Filter the session list by agent (claude-code|codex|antigravity), or "all". Defaults to the configured agent. Pulling by sessionId works for any agent.',
 					),
+				as: z
+					.string()
+					.optional()
+					.describe(
+						"Convert the pulled session into this agent's format on install (claude-code|codex). Transcript-only/lossy. Cannot convert to antigravity.",
+					),
 				limit: z.number().optional().describe("Max sessions to list"),
 			}),
 		},
@@ -158,6 +164,7 @@ export function registerTools(server: McpServer) {
 					const result = await unbundleSession({
 						bundlePath: tmpFile,
 						targetDir: args.targetDir as string | undefined,
+						convertTo: args.as as string | undefined,
 					});
 
 					return {
