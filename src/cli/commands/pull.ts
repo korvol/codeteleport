@@ -27,7 +27,7 @@ export const pullCommand = new Command("pull")
 	.option("--machine <name>", "Filter by source machine")
 	.option("--agent <id>", "List sessions for a specific agent (claude-code|codex|antigravity)")
 	.option("--all", "List sessions from all agents (overrides the default agent scope)")
-	.option("--as <id>", "Convert the session into another agent's format on install (claude-code|codex)")
+	.option("--as <id>", "Convert the session into another agent's format on install (claude-code|codex|antigravity)")
 	.action(async (opts) => {
 		try {
 			const config = readConfig();

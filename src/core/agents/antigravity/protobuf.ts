@@ -52,6 +52,53 @@ function primitiveFieldSize(wireType: number, buffer: Buffer, offset: number): n
 	throw new Error(`Unsupported wire type: ${wireType}`);
 }
 
+/**
+ * Read the bytes of the first length-delimited field at `fieldPath` (1-based field
+ * numbers, descending into sub-messages), or null if any hop is missing. Used to
+ * pull message text out of an Antigravity step blob (e.g. user text at 19→2,
+ * assistant text at 20→1) without a full protobuf schema.
+ */
+export function readProtobufField(buffer: Buffer, fieldPath: number[]): Buffer | null {
+	let cur = buffer;
+	for (const want of fieldPath) {
+		let offset = 0;
+		let found: Buffer | null = null;
+		while (offset < cur.length) {
+			const key = readVarint(cur, offset);
+			offset += key.bytes;
+			const wireType = key.value & 0x07;
+			const fieldNum = key.value >> 3;
+			if (wireType === 2) {
+				const lenInfo = readVarint(cur, offset);
+				offset += lenInfo.bytes;
+				const val = cur.subarray(offset, offset + lenInfo.value);
+				offset += lenInfo.value;
+				if (fieldNum === want) {
+					found = val;
+					break;
+				}
+			} else if (wireType === 0) {
+				offset += readVarint(cur, offset).bytes;
+			} else if (wireType === 1) {
+				offset += 8;
+			} else if (wireType === 5) {
+				offset += 4;
+			} else {
+				return null;
+			}
+		}
+		if (!found) return null;
+		cur = found;
+	}
+	return cur;
+}
+
+/** Convenience: read a UTF-8 string field at `fieldPath`, or null. */
+export function readProtobufString(buffer: Buffer, fieldPath: number[]): string | null {
+	const buf = readProtobufField(buffer, fieldPath);
+	return buf === null ? null : buf.toString("utf8");
+}
+
 /** Rewrite every occurrence of `fromStr` to `toStr` inside a protobuf-encoded buffer. */
 export function rewriteProtobuf(buffer: Buffer, fromStr: string, toStr: string): Buffer {
 	if (!fromStr || fromStr === toStr) return buffer;

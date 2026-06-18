@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { rewriteProtobuf } from "../agents/antigravity/protobuf";
 import { encodePath } from "../paths";
 import { type Db, openDb } from "../sqlite";
+import { ANTIGRAVITY_SCHEMA, STEP_STATUS_DONE, STEP_TYPE, TEMPLATE, TEMPLATE_BLOBS } from "./antigravity-fixtures";
 import type { CanonicalTranscript } from "./types";
 
 export interface WriteResult {
@@ -228,4 +230,117 @@ export function writeCodexSession(
 	}
 
 	return { sessionId, installedTo, resumeCommand: `codex resume ${sessionId}` };
+}
+
+// ── Antigravity writer ────────────────────────────────────────────────────────
+
+/** Apply id/path/text swaps to a template protobuf blob. */
+function rewriteAgyBlob(blob: Buffer, swaps: Array<[string, string]>): Buffer {
+	let buf = blob;
+	for (const [from, to] of swaps) buf = rewriteProtobuf(buf, from, to);
+	return buf;
+}
+
+/**
+ * Convert a canonical transcript into a resumable Antigravity conversation.
+ *
+ * Antigravity's session is a SQLite DB whose payloads are protobuf, with no .proto
+ * we can build from scratch. So we clone real template step blobs (a user step and
+ * an assistant step) and swap their ids, per-turn uuid, message text, and baked-in
+ * paths via length-prefix-aware protobuf rewriting. Tool steps and gen_metadata are
+ * omitted — agy renders history from the steps table and tolerates their absence.
+ */
+export function writeAntigravitySession(
+	transcript: CanonicalTranscript,
+	opts: { geminiDir: string; cwd: string; userDir: string },
+): WriteResult {
+	const { geminiDir, cwd, userDir } = opts;
+	const sessionId = crypto.randomUUID();
+	const trajId = crypto.randomUUID();
+
+	// Swaps applied to every cloned blob: identifiers + the template's baked-in paths.
+	const baseSwaps: Array<[string, string]> = [
+		[TEMPLATE.convId, sessionId],
+		[TEMPLATE.trajId, trajId],
+		[TEMPLATE.cwd, cwd],
+		[TEMPLATE.userDir, userDir],
+	];
+
+	const convDir = path.join(geminiDir, "conversations");
+	fs.mkdirSync(convDir, { recursive: true });
+	const installedTo = path.join(convDir, `${sessionId}.db`);
+	// Start from a clean file (openDb opens read-write and creates it).
+	fs.rmSync(installedTo, { force: true });
+
+	const db = openDb(installedTo);
+	try {
+		for (const stmt of ANTIGRAVITY_SCHEMA) db.exec(stmt);
+		db.run(`pragma user_version = ${TEMPLATE.userVersion}`);
+
+		db.run(
+			"insert into trajectory_meta (trajectory_id, cascade_id, trajectory_type, source) values (?, ?, ?, ?)",
+			trajId,
+			sessionId,
+			TEMPLATE.trajectoryType,
+			TEMPLATE.source,
+		);
+		db.run(
+			"insert into trajectory_metadata_blob (id, data) values ('main', ?)",
+			rewriteAgyBlob(TEMPLATE_BLOBS.trajectoryMeta, baseSwaps),
+		);
+		db.run(
+			"insert into executor_metadata (idx, data) values (0, ?)",
+			rewriteAgyBlob(TEMPLATE_BLOBS.executorMeta, baseSwaps),
+		);
+
+		transcript.messages.forEach((m, idx) => {
+			const isUser = m.role === "user";
+			const template = isUser ? TEMPLATE_BLOBS.userStep : TEMPLATE_BLOBS.asstStep;
+			const swaps: Array<[string, string]> = [
+				...baseSwaps,
+				// Give each message its own turn id so steps stay independent.
+				[TEMPLATE.turnUuid, crypto.randomUUID()],
+				[isUser ? TEMPLATE.userText : TEMPLATE.asstText, m.text],
+			];
+			db.run(
+				"insert into steps (idx, step_type, status, step_payload, step_format) values (?, ?, ?, ?, 0)",
+				idx,
+				isUser ? STEP_TYPE.user : STEP_TYPE.assistant,
+				STEP_STATUS_DONE,
+				rewriteAgyBlob(template, swaps),
+			);
+		});
+	} finally {
+		db.close();
+	}
+
+	// Synthesize a matching brain transcript (step_index mirrors the DB idx). agy
+	// renders from the DB, but Antigravity tooling also reads this for summaries.
+	const logsDir = path.join(geminiDir, "brain", sessionId, ".system_generated", "logs");
+	fs.mkdirSync(logsDir, { recursive: true });
+	const nowIso = new Date().toISOString();
+	const lines = transcript.messages.map((m, i) =>
+		m.role === "user"
+			? JSON.stringify({
+					step_index: i,
+					source: "USER_EXPLICIT",
+					type: "USER_INPUT",
+					status: "DONE",
+					created_at: nowIso,
+					content: `<USER_REQUEST>\n${m.text}\n</USER_REQUEST>`,
+				})
+			: JSON.stringify({
+					step_index: i,
+					source: "MODEL",
+					type: "PLANNER_RESPONSE",
+					status: "DONE",
+					created_at: nowIso,
+					content: m.text,
+				}),
+	);
+	const transcriptFile = `${lines.join("\n")}\n`;
+	fs.writeFileSync(path.join(logsDir, "transcript.jsonl"), transcriptFile);
+	fs.writeFileSync(path.join(logsDir, "transcript_full.jsonl"), transcriptFile);
+
+	return { sessionId, installedTo, resumeCommand: `agy --conversation ${sessionId}` };
 }

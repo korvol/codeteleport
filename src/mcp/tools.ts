@@ -142,7 +142,7 @@ export function registerTools(server: McpServer) {
 					.string()
 					.optional()
 					.describe(
-						"Convert the pulled session into this agent's format on install (claude-code|codex). Transcript-only/lossy. Cannot convert to antigravity.",
+						"Convert the pulled session into this agent's format on install (claude-code|codex|antigravity). Transcript-only/lossy.",
 					),
 				limit: z.number().optional().describe("Max sessions to list"),
 			}),

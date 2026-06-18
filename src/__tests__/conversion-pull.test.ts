@@ -62,13 +62,16 @@ describe("unbundleSession --convertTo (Model A conversion on pull)", () => {
 		expect(text).toContain("converted");
 	});
 
-	it("refuses to convert to antigravity", async () => {
+	it("converts a Claude bundle to an Antigravity session on install", async () => {
 		const srcClaude = path.join(tmp, "src2", ".claude");
 		const projDir = path.join(srcClaude, "projects", encodePath(sourceCwd));
 		fs.mkdirSync(projDir, { recursive: true });
 		fs.writeFileSync(
 			path.join(projDir, `${sessionId}.jsonl`),
-			JSON.stringify({ type: "user", cwd: sourceCwd, message: { content: "x" } }),
+			[
+				JSON.stringify({ type: "user", cwd: sourceCwd, message: { content: "convert me to agy" } }),
+				JSON.stringify({ type: "assistant", message: { content: "in antigravity now" } }),
+			].join("\n"),
 		);
 		const bundle = await bundleSession({
 			sessionId,
@@ -78,8 +81,25 @@ describe("unbundleSession --convertTo (Model A conversion on pull)", () => {
 			sourceUserDir: "/Users/alice",
 		});
 
-		await expect(
-			unbundleSession({ bundlePath: bundle.bundlePath, targetUserDir: path.join(tmp, "t"), convertTo: "antigravity" }),
-		).rejects.toThrow(/cannot convert|antigravity/i);
+		const tgtUser = path.join(tmp, "carol");
+		const geminiDir = path.join(tgtUser, ".gemini", "antigravity-cli");
+		const result = await unbundleSession({
+			bundlePath: bundle.bundlePath,
+			targetDir: path.join(tgtUser, "proj"),
+			targetUserDir: tgtUser,
+			geminiDir,
+			convertTo: "antigravity",
+		});
+
+		expect(result.resumeCommand).toBe(`agy --conversation ${result.sessionId}`);
+		expect(result.sessionId).not.toBe(sessionId); // a fresh Antigravity conversation id
+		expect(result.installedTo).toBe(path.join(geminiDir, "conversations", `${result.sessionId}.db`));
+		const db = openDb(result.installedTo, { readOnly: true });
+		try {
+			const steps = db.all<{ idx: number; step_type: number }>("select idx, step_type from steps order by idx");
+			expect(steps.map((s) => s.step_type)).toEqual([14, 15]);
+		} finally {
+			db.close();
+		}
 	});
 });

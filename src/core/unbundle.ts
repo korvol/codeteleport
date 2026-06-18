@@ -42,8 +42,10 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 				targetAgentId: options.convertTo,
 				stagingDir,
 				targetCwd,
+				targetUserDir,
 				claudeDir: options.claudeDir ?? path.join(targetUserDir, ".claude"),
 				codexDir: options.codexDir ?? path.join(targetUserDir, ".codex"),
+				geminiDir: options.geminiDir ?? path.join(targetUserDir, ".gemini", "antigravity-cli"),
 			});
 		}
 

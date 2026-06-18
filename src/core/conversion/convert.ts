@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { readAntigravityTranscript, readClaudeTranscript, readCodexTranscript } from "./readers";
 import type { CanonicalTranscript } from "./types";
-import { type WriteResult, writeClaudeSession, writeCodexSession } from "./writers";
+import { type WriteResult, writeAntigravitySession, writeClaudeSession, writeCodexSession } from "./writers";
 
-/** Agents we can WRITE (convert into). Antigravity is read-only — we never synthesize its protobuf DB. */
-const WRITABLE_TARGETS = ["claude-code", "codex"] as const;
+/** Agents we can WRITE (convert into) — the full set, so any agent converts to any other. */
+const WRITABLE_TARGETS = ["claude-code", "codex", "antigravity"] as const;
 
 /** Whether a source session can be converted into the target agent's format. */
 export function canConvert(sourceAgentId: string, targetAgentId: string): boolean {
@@ -38,9 +38,13 @@ export interface ConvertArgs {
 	stagingDir: string;
 	/** Where the converted session should be anchored on this machine. */
 	targetCwd: string;
+	/** Target machine home dir (used to rewrite template paths for Antigravity). */
+	targetUserDir: string;
 	/** Target agent home dirs. */
 	claudeDir: string;
 	codexDir: string;
+	/** Antigravity home (~/.gemini/antigravity-cli). */
+	geminiDir: string;
 }
 
 /**
@@ -49,7 +53,7 @@ export interface ConvertArgs {
  * (notably any target = antigravity).
  */
 export function convertInStaging(args: ConvertArgs): WriteResult {
-	const { sourceAgentId, targetAgentId, stagingDir, targetCwd, claudeDir, codexDir } = args;
+	const { sourceAgentId, targetAgentId, stagingDir, targetCwd, targetUserDir, claudeDir, codexDir, geminiDir } = args;
 	if (!canConvert(sourceAgentId, targetAgentId)) {
 		throw new Error(
 			`Cannot convert ${sourceAgentId} → ${targetAgentId}. Conversion targets are: ${conversionTargetsFor(sourceAgentId).join(", ") || "(none)"}.`,
@@ -57,5 +61,7 @@ export function convertInStaging(args: ConvertArgs): WriteResult {
 	}
 	const transcript = readSource(sourceAgentId, stagingDir);
 	if (targetAgentId === "codex") return writeCodexSession(transcript, { codexDir, cwd: targetCwd });
+	if (targetAgentId === "antigravity")
+		return writeAntigravitySession(transcript, { geminiDir, cwd: targetCwd, userDir: targetUserDir });
 	return writeClaudeSession(transcript, { claudeDir, cwd: targetCwd });
 }

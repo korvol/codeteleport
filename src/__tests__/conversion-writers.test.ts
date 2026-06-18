@@ -2,8 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readProtobufString } from "../core/agents/antigravity/protobuf";
+import { STEP_TYPE } from "../core/conversion/antigravity-fixtures";
 import type { CanonicalTranscript } from "../core/conversion/types";
-import { writeClaudeSession, writeCodexSession } from "../core/conversion/writers";
+import { writeAntigravitySession, writeClaudeSession, writeCodexSession } from "../core/conversion/writers";
 import { encodePath } from "../core/paths";
 import { openDb } from "../core/sqlite";
 
@@ -108,5 +110,74 @@ describe("writeCodexSession", () => {
 		db.close();
 		expect(row?.cwd).toBe(cwd);
 		expect(row?.rollout_path).toBe(r.installedTo);
+	});
+});
+
+describe("writeAntigravitySession", () => {
+	let tmp: string;
+	let geminiDir: string;
+	beforeEach(() => {
+		tmp = fs.mkdtempSync(path.join(os.tmpdir(), "conv-agy-"));
+		geminiDir = path.join(tmp, ".gemini", "antigravity-cli");
+	});
+	afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+	it("synthesizes a conversation DB whose protobuf steps carry the transcript", () => {
+		const cwd = "/Users/bob/proj";
+		const r = writeAntigravitySession(TRANSCRIPT, { geminiDir, cwd, userDir: "/Users/bob" });
+
+		expect(r.resumeCommand).toBe(`agy --conversation ${r.sessionId}`);
+		expect(r.installedTo).toBe(path.join(geminiDir, "conversations", `${r.sessionId}.db`));
+		expect(fs.existsSync(r.installedTo)).toBe(true);
+
+		const db = openDb(r.installedTo, { readOnly: true });
+		try {
+			// steps: one per message, contiguous idx, alternating user/assistant types
+			const steps = db.all<{ idx: number; step_type: number; status: number; step_payload: Buffer }>(
+				"select idx, step_type, status, step_payload from steps order by idx",
+			);
+			expect(steps.map((s) => s.idx)).toEqual([0, 1, 2]);
+			expect(steps.map((s) => s.step_type)).toEqual([STEP_TYPE.user, STEP_TYPE.assistant, STEP_TYPE.user]);
+			expect(steps.every((s) => s.status === 3)).toBe(true);
+
+			// the text lives at field 19→2 for user steps, 20→1 for assistant steps
+			expect(readProtobufString(steps[0].step_payload, [19, 2])).toBe("do the thing");
+			expect(readProtobufString(steps[1].step_payload, [20, 1])).toBe("done");
+			expect(readProtobufString(steps[2].step_payload, [19, 2])).toBe("thanks");
+
+			// trajectory_meta is anchored to this conversation; gen_metadata is empty
+			const meta = db.get<{ cascade_id: string; trajectory_id: string }>("select * from trajectory_meta");
+			expect(meta?.cascade_id).toBe(r.sessionId);
+			expect(meta?.trajectory_id).not.toBe("");
+			expect(db.get<{ c: number }>("select count(*) as c from gen_metadata")?.c).toBe(0);
+		} finally {
+			db.close();
+		}
+
+		// a matching brain transcript is written (step_index mirrors DB idx)
+		const transcript = path.join(geminiDir, "brain", r.sessionId, ".system_generated", "logs", "transcript.jsonl");
+		expect(fs.existsSync(transcript)).toBe(true);
+		const entries = fs
+			.readFileSync(transcript, "utf-8")
+			.trim()
+			.split("\n")
+			.map((l) => JSON.parse(l));
+		expect(entries.map((e) => e.type)).toEqual(["USER_INPUT", "PLANNER_RESPONSE", "USER_INPUT"]);
+	});
+
+	it("rewrites the template's baked-in paths to the target cwd", () => {
+		const cwd = "/Users/carol/work/api";
+		const r = writeAntigravitySession(TRANSCRIPT, { geminiDir, cwd, userDir: "/Users/carol" });
+
+		const db = openDb(r.installedTo, { readOnly: true });
+		try {
+			const blob = db.get<{ data: Buffer }>("select data from trajectory_metadata_blob where id = 'main'")?.data;
+			const text = Buffer.from(blob as Buffer).toString("latin1");
+			expect(text).toContain(cwd);
+			// none of the template's source paths survive
+			expect(text).not.toContain("/Users/clawadmin/workspace/codeteleport-monorepo");
+		} finally {
+			db.close();
+		}
 	});
 });
