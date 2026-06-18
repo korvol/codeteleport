@@ -21,6 +21,15 @@ const AGENTS: Record<string, AgentConfig> = {
 		detectProcess: "claude",
 		mcpAddCommand: "claude mcp add codeteleport -- codeteleport-mcp",
 	},
+	codex: {
+		id: "codex",
+		name: "Codex",
+		sessionDir: path.join(os.homedir(), ".codex", "sessions"),
+		sessionFilePattern: "**/*.jsonl",
+		resumeCommand: "codex resume",
+		detectProcess: "codex",
+		mcpAddCommand: "codex mcp add codeteleport -- codeteleport-mcp",
+	},
 };
 
 export function getAgent(id?: string): AgentConfig {

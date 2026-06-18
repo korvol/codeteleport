@@ -4,6 +4,7 @@ import path from "node:path";
 import * as tar from "tar";
 import { DEFAULT_AGENT_ID, assertSupportedAgent } from "../shared/constants";
 import type { UnbundleOptions, UnbundleResult } from "../shared/types";
+import { unbundleCodexSession } from "./agents/codex/unbundle";
 import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
 
 export async function unbundleSession(options: UnbundleOptions): Promise<UnbundleResult> {
@@ -26,6 +27,9 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// made before this field existed are treated as claude-code.
 		const agentId = meta.agentId ?? DEFAULT_AGENT_ID;
 		assertSupportedAgent(agentId);
+		if (agentId === "codex") {
+			return unbundleCodexSession({ stagingDir, meta, options });
+		}
 
 		// Determine target paths
 		const targetDir = options.targetDir;

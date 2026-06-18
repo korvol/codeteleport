@@ -26,6 +26,7 @@ export interface BundleOptions {
 	cwd: string;
 	outputDir?: string;
 	claudeDir?: string; // override ~/.claude for testing
+	codexDir?: string; // override ~/.codex for testing
 	sourceUserDir?: string; // override os.homedir() for testing
 	/** Which agent produced the session. Defaults to "claude-code". Recorded in the bundle. */
 	agentId?: string;
@@ -41,6 +42,8 @@ export interface UnbundleResult {
 	memoryInstalled?: { written: string[]; merged: string[]; skipped: string[] };
 	/** Per-file disposition of restored working/temp files (Part B). */
 	extraFilesInstalled?: Array<{ path: string; action: "written" | "overwritten" | "skipped" }>;
+	/** Codex only: whether the local thread inventory (state_5.sqlite) was updated. */
+	codexStateApplied?: boolean;
 }
 
 export interface UnbundleOptions {
@@ -48,6 +51,7 @@ export interface UnbundleOptions {
 	targetDir?: string; // full path to anchor the session (e.g. /Users/bob/projects/code-teleport)
 	targetUserDir?: string; // override — auto-detected from targetDir if not provided
 	claudeDir?: string; // override ~/.claude for testing
+	codexDir?: string; // override ~/.codex for testing
 	resumeCommandPrefix?: string; // override "claude --resume" — from agent config
 	/** How to handle pre-existing memory files on the target. Default "merge". */
 	memoryConflict?: "merge" | "overwrite" | "skip";
