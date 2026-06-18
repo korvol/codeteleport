@@ -9,7 +9,7 @@ import { unbundleAntigravitySession } from "./agents/antigravity/unbundle";
 import { unbundleCodexSession } from "./agents/codex/unbundle";
 import { convertInStaging } from "./conversion/convert";
 import {
-	detectHomeDir,
+	detectHomeDirSafe,
 	encodePath,
 	isSensitivePath,
 	isUnder,
@@ -84,7 +84,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 				// Derive from claudeDir: /path/to/.claude → /path/to
 				targetUserDir = path.dirname(options.claudeDir);
 			} else {
-				targetUserDir = detectHomeDir(targetDir);
+				targetUserDir = detectHomeDirSafe(targetDir);
 			}
 			targetClaudeDir = options.claudeDir ?? path.join(targetUserDir, ".claude");
 			targetCwd = targetDir;

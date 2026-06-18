@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { UnbundleOptions, UnbundleResult } from "../../../shared/types";
-import { detectHomeDir, rewritePathValue, rewritePaths } from "../../paths";
+import { detectHomeDirSafe, rewritePathValue, rewritePaths } from "../../paths";
 import { type Db, openDb } from "../../sqlite";
 import { antigravityDirDefault } from "./local";
 import { rewritePathLeaf, rewriteProtobuf } from "./protobuf";
@@ -90,7 +90,7 @@ export function unbundleAntigravitySession(args: AntigravityUnbundleArgs): Unbun
 	const { stagingDir, meta, options } = args;
 	const sessionId = String(meta.sessionId);
 	const sourceCwd = String(meta.sourceCwd ?? "");
-	const sourceUserDir = String(meta.sourceUserDir ?? detectHomeDir(sourceCwd));
+	const sourceUserDir = String(meta.sourceUserDir ?? detectHomeDirSafe(sourceCwd));
 
 	let targetUserDir: string;
 	let targetGeminiHome: string;
@@ -99,7 +99,7 @@ export function unbundleAntigravitySession(args: AntigravityUnbundleArgs): Unbun
 	if (options.targetDir) {
 		targetUserDir =
 			options.targetUserDir ??
-			(options.geminiDir ? detectHomeDir(options.geminiDir) : detectHomeDir(options.targetDir));
+			(options.geminiDir ? detectHomeDirSafe(options.geminiDir) : detectHomeDirSafe(options.targetDir));
 		targetGeminiHome = options.geminiDir ?? defaultHome(targetUserDir);
 		targetCwd = options.targetDir;
 	} else {

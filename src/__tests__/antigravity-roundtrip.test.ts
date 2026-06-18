@@ -4,7 +4,7 @@ import path from "node:path";
 import * as tar from "tar";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bundleAntigravitySession } from "../core/agents/antigravity/bundle";
-import { scanAntigravityLocalSessions } from "../core/agents/antigravity/local";
+import { scanAntigravityLocalSessions, scanAntigravityProjectSessions } from "../core/agents/antigravity/local";
 import { unbundleAntigravitySession } from "../core/agents/antigravity/unbundle";
 import { openDb } from "../core/sqlite";
 
@@ -140,6 +140,9 @@ describe("Antigravity bundle → unbundle round-trip", () => {
 			expect(sessions).toHaveLength(1);
 			expect(sessions[0].projectPath).toBe("C:/Users/winuser/proj"); // not "/C:/Users/..."
 			expect(sessions[0].projectName).toBe("proj");
+			// push --session-id filters by project cwd: the native (backslash) cwd must
+			// match the forward-slash projectPath recovered from the file:// blob.
+			expect(scanAntigravityProjectSessions("C:\\Users\\winuser\\proj", wtmp)).toHaveLength(1);
 		} finally {
 			fs.rmSync(wtmp, { recursive: true, force: true });
 		}

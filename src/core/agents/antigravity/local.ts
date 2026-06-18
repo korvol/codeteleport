@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LocalSession } from "../../local";
+import { samePath } from "../../paths";
 import { openDb } from "../../sqlite";
 
 /** Default Antigravity home (~/.gemini/antigravity-cli), overridable for tests. */
@@ -121,7 +122,7 @@ export function scanAntigravityProjectSessions(
 	projectPath: string,
 	gemDir: string = antigravityDirDefault(),
 ): LocalSession[] {
-	return scanAntigravityLocalSessions(gemDir).filter((s) => s.projectPath === projectPath);
+	return scanAntigravityLocalSessions(gemDir).filter((s) => samePath(s.projectPath, projectPath));
 }
 
 /** Locate a conversation DB by exact id or unambiguous prefix. */

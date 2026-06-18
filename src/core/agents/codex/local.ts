@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LocalSession } from "../../local";
+import { samePath } from "../../paths";
 import { scanCodexSession } from "./scanner";
 
 /** Default Codex home: CODEX_HOME if set (official Codex behavior), else ~/.codex. */
@@ -66,7 +67,7 @@ export function scanCodexLocalSessions(codexDir: string = codexDirDefault()): Lo
 
 /** Scan Codex rollouts for a single project cwd, newest first. */
 export function scanCodexProjectSessions(projectPath: string, codexDir: string = codexDirDefault()): LocalSession[] {
-	return scanCodexLocalSessions(codexDir).filter((s) => s.projectPath === projectPath);
+	return scanCodexLocalSessions(codexDir).filter((s) => samePath(s.projectPath, projectPath));
 }
 
 /** Locate a session's rollout JSONL by exact id or unambiguous prefix. */

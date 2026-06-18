@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { SENSITIVE_FILE_PATTERNS, SENSITIVE_HOME_DIRS } from "../shared/constants";
 
@@ -236,4 +237,32 @@ export function detectHomeDir(fullPath: string): string {
 	if (rootMatch) return rootMatch[1];
 
 	throw new Error(`could not auto-detect home dir from: ${fullPath}`);
+}
+
+/**
+ * Like `detectHomeDir`, but falls back to the local home (`os.homedir()`) instead
+ * of throwing when the path shape isn't a recognized home — e.g. a project on a
+ * Windows drive outside `C:\Users\…` (a CI checkout at `D:\a\…`, a `D:\projects`
+ * tree). Used when restoring to the local machine, where the local home is the
+ * right default target.
+ */
+export function detectHomeDirSafe(fullPath: string): string {
+	try {
+		return detectHomeDir(fullPath);
+	} catch {
+		return os.homedir();
+	}
+}
+
+/**
+ * Whether two paths point at the same location. Separator-insensitive (`/` vs `\`)
+ * and, on Windows, case-insensitive — so a path recovered as a forward-slash
+ * `file://` workspace URI matches the same dir expressed with native backslashes.
+ */
+export function samePath(a: string, b: string): boolean {
+	const norm = (p: string) => {
+		const s = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
+		return process.platform === "win32" ? s.toLowerCase() : s;
+	};
+	return norm(a) === norm(b);
 }

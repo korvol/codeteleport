@@ -1,6 +1,8 @@
+import os from "node:os";
 import { describe, expect, it } from "vitest";
 import {
 	detectHomeDir,
+	detectHomeDirSafe,
 	encodePath,
 	isSensitivePath,
 	isUnder,
@@ -8,6 +10,7 @@ import {
 	pathBasename,
 	rewritePathValue,
 	rewritePaths,
+	samePath,
 } from "../core/paths";
 
 describe("encodePath — Windows", () => {
@@ -199,5 +202,30 @@ describe("rewritePathValue — exact single-path relocation", () => {
 
 	it("respects the path boundary (alice ≠ alice2)", () => {
 		expect(rewritePathValue("/Users/alice2/x", "/Users/alice", "/Users/bob")).toBe("/Users/alice2/x");
+	});
+});
+
+describe("detectHomeDirSafe", () => {
+	it("falls back to os.homedir() for a Windows path outside C:\\Users", () => {
+		// e.g. a CI checkout at D:\a\… or a project on another drive — must not throw.
+		expect(detectHomeDirSafe("D:\\a\\codeteleport\\codeteleport")).toBe(os.homedir());
+		expect(detectHomeDirSafe("D:\\projects\\app")).toBe(os.homedir());
+	});
+
+	it("still returns the detected home when the shape is recognized", () => {
+		expect(detectHomeDirSafe("C:\\Users\\bob\\proj")).toBe("C:\\Users\\bob");
+		expect(detectHomeDirSafe("/Users/alice/x")).toBe("/Users/alice");
+	});
+});
+
+describe("samePath", () => {
+	it("matches a forward-slash path against its backslash form (Antigravity file:// workspace)", () => {
+		expect(samePath("C:/Users/x/proj", "C:\\Users\\x\\proj")).toBe(true);
+	});
+	it("ignores a trailing separator", () => {
+		expect(samePath("/Users/a/proj/", "/Users/a/proj")).toBe(true);
+	});
+	it("distinguishes genuinely different paths", () => {
+		expect(samePath("C:/Users/x", "C:/Users/y")).toBe(false);
 	});
 });

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { UnbundleOptions, UnbundleResult } from "../../../shared/types";
-import { detectHomeDir, rewritePathValue, rewritePaths } from "../../paths";
+import { detectHomeDirSafe, rewritePathValue, rewritePaths } from "../../paths";
 import { type Db, openDb } from "../../sqlite";
 import { codexDirDefault } from "./local";
 
@@ -57,7 +57,7 @@ export function unbundleCodexSession(args: CodexUnbundleArgs): UnbundleResult {
 	const { stagingDir, meta, options } = args;
 	const sessionId = String(meta.sessionId);
 	const sourceCwd = String(meta.sourceCwd ?? "");
-	const sourceUserDir = String(meta.sourceUserDir ?? detectHomeDir(sourceCwd));
+	const sourceUserDir = String(meta.sourceUserDir ?? detectHomeDirSafe(sourceCwd));
 
 	// Resolve target paths (mirror of the Claude resolver, but anchored at ~/.codex).
 	let targetUserDir: string;
@@ -65,7 +65,8 @@ export function unbundleCodexSession(args: CodexUnbundleArgs): UnbundleResult {
 	let targetCwd: string;
 	if (options.targetDir) {
 		targetUserDir =
-			options.targetUserDir ?? (options.codexDir ? path.dirname(options.codexDir) : detectHomeDir(options.targetDir));
+			options.targetUserDir ??
+			(options.codexDir ? path.dirname(options.codexDir) : detectHomeDirSafe(options.targetDir));
 		targetCodexHome = options.codexDir ?? path.join(targetUserDir, ".codex");
 		targetCwd = options.targetDir;
 	} else {
