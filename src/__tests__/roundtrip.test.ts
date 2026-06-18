@@ -157,7 +157,7 @@ describe("Round-trip: bundle → unbundle", () => {
 		expect(unbundleResult.resumeCommand).toBe(`claude --resume ${sessionId}`);
 
 		// ── VERIFY PATHS REWRITTEN ──
-		const targetCwd = sourceCwd.replace(sourceUserDir, targetHome);
+		const targetCwd = path.join(targetHome, "projects", "code-teleport");
 		const targetEncodedCwd = encodePath(targetCwd);
 		const targetProjDir = path.join(targetClaude, "projects", targetEncodedCwd);
 
@@ -166,23 +166,22 @@ describe("Round-trip: bundle → unbundle", () => {
 		expect(fs.existsSync(jsonlPath)).toBe(true);
 		const jsonlContent = fs.readFileSync(jsonlPath, "utf-8");
 		expect(jsonlContent).not.toContain("/Users/alice");
-		expect(jsonlContent).toContain(targetHome);
 
-		// Verify each JSONL line individually
+		// Verify each JSONL line individually via decoded values (host-native paths).
 		const lines = jsonlContent.trim().split("\n");
 		expect(lines).toHaveLength(4);
 		const firstEntry = JSON.parse(lines[0]);
-		expect(firstEntry.cwd).toBe(`${targetHome}/projects/code-teleport`);
+		expect(firstEntry.cwd).toBe(targetCwd);
 		const secondEntry = JSON.parse(lines[1]);
-		expect(secondEntry.message.content).toContain(`${targetHome}/projects/code-teleport/bundle.sh`);
-		expect(secondEntry.toolCalls[0].input.file_path).toBe(`${targetHome}/projects/code-teleport/bundle.sh`);
+		expect(secondEntry.message.content).toContain(path.join(targetCwd, "bundle.sh"));
+		expect(secondEntry.toolCalls[0].input.file_path).toBe(path.join(targetCwd, "bundle.sh"));
 
 		// ── VERIFY SUBAGENT PATHS REWRITTEN ──
 		const subagentJsonl = path.join(targetProjDir, sessionId, "subagents", "explore-001.jsonl");
 		expect(fs.existsSync(subagentJsonl)).toBe(true);
 		const subContent = fs.readFileSync(subagentJsonl, "utf-8");
 		expect(subContent).not.toContain("/Users/alice");
-		expect(subContent).toContain(targetHome);
+		expect(JSON.parse(subContent.trim()).cwd).toBe(targetCwd);
 
 		// ── VERIFY FILE HISTORY ──
 		const fhDir = path.join(targetClaude, "file-history", sessionId);
@@ -333,7 +332,7 @@ describe("Round-trip: bundle → unbundle", () => {
 			// Memory restored + rewritten
 			const memOut = path.join(tgtProj, "memory", "MEMORY.md");
 			expect(fs.existsSync(memOut)).toBe(true);
-			expect(fs.readFileSync(memOut, "utf-8")).toContain(`${tgtCwd}/notes.txt`);
+			expect(fs.readFileSync(memOut, "utf-8")).toContain(path.join(tgtCwd, "notes.txt"));
 			expect(fs.readFileSync(memOut, "utf-8")).not.toContain(srcHome);
 
 			// cwd-relative working file restored at the rewritten path

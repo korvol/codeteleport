@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerTools } from "../mcp/tools";
 
@@ -18,8 +20,8 @@ vi.mock("../core/session", () => ({
 	}),
 }));
 
-// bundlePath points to a real temp file created in beforeEach
-const fakeBundlePath = "/tmp/codeteleport-test-bundle.tar.gz";
+// bundlePath points to a real temp file created in beforeEach (OS-native temp dir)
+const fakeBundlePath = path.join(os.tmpdir(), "codeteleport-test-bundle.tar.gz");
 
 vi.mock("../core/bundle", () => ({
 	bundleSession: async () => ({

@@ -10,6 +10,25 @@
  * fail to parse as a valid tag).
  */
 
+import { rewritePaths } from "../../paths";
+
+/**
+ * Relocate any embedded path inside a single protobuf leaf string. Uses the
+ * separator-tolerant content rewriter (raw mode) so it catches both native
+ * (`C:\\…`) and `file://`-URI (`C:/…`) forms and translates separators to the
+ * target OS. `file://` URIs are then forced back to forward slashes (URIs are
+ * OS-independent) with any doubled authority slash collapsed.
+ */
+export function rewritePathLeaf(str: string, fromStr: string, toStr: string): string {
+	const rewritten = rewritePaths(str, fromStr, toStr, { jsonEscaped: false });
+	if (rewritten === str || !rewritten.includes("file://")) return rewritten;
+	// Bound the URI at whitespace, quotes, and control/binary bytes so the slash
+	// normalization can't reach into adjacent non-URI bytes of a binary leaf.
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — stop the URI scan at binary/control bytes
+	const URI = /file:\/\/[^\s"'\x00-\x1f]*/g;
+	return rewritten.replace(URI, (m) => m.replace(/\\/g, "/")).replace(/file:\/{4,}/g, "file:///");
+}
+
 function readVarint(buffer: Buffer, offset: number): { value: number; bytes: number } {
 	let value = 0;
 	let shift = 0;
@@ -132,9 +151,12 @@ export function rewriteProtobuf(buffer: Buffer, fromStr: string, toStr: string):
 			try {
 				rewrittenVal = rewriteProtobuf(valBuf, fromStr, toStr);
 			} catch {
-				// Leaf bytes that aren't a sub-message: treat as a string.
-				const str = valBuf.toString("utf8");
-				rewrittenVal = str.includes(fromStr) ? Buffer.from(str.split(fromStr).join(toStr), "utf8") : valBuf;
+				// Leaf bytes that aren't a sub-message: treat as a string and relocate
+				// any embedded path (separator-tolerant + cross-OS aware). latin1 is a
+				// lossless 1:1 byte mapping, so non-path bytes round-trip unchanged.
+				const str = valBuf.toString("latin1");
+				const rewritten = rewritePathLeaf(str, fromStr, toStr);
+				rewrittenVal = rewritten === str ? valBuf : Buffer.from(rewritten, "latin1");
 			}
 
 			chunks.push(writeVarint((fieldNum << 3) | 2));

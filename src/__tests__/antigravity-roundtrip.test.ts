@@ -4,6 +4,7 @@ import path from "node:path";
 import * as tar from "tar";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bundleAntigravitySession } from "../core/agents/antigravity/bundle";
+import { scanAntigravityLocalSessions } from "../core/agents/antigravity/local";
 import { unbundleAntigravitySession } from "../core/agents/antigravity/unbundle";
 import { openDb } from "../core/sqlite";
 
@@ -99,14 +100,16 @@ describe("Antigravity bundle → unbundle round-trip", () => {
 		const tgtDb = path.join(tgtGem, "conversations", `${ID}.db`);
 		expect(result.installedTo).toBe(tgtDb);
 
-		const tgtCwd = `${tgtUser}/workspace/app`;
+		const tgtCwd = path.join(tgtUser, "workspace", "app");
+		// trajectory blob holds a file:// URI — URIs stay forward-slash on every OS.
 		const meta1 = blobLatin1(tgtDb, "trajectory_metadata_blob", "data");
 		expect(meta1).not.toContain("/Users/alice");
-		expect(meta1).toContain(`${tgtCwd}/main.ts`);
+		expect(meta1).toContain(`file://${tgtCwd.replace(/\\/g, "/")}/main.ts`);
 
+		// steps blob holds a native filesystem path — separators are host-native.
 		const step1 = blobLatin1(tgtDb, "steps", "step_payload");
 		expect(step1).not.toContain("/Users/alice");
-		expect(step1).toContain(`${tgtCwd}/lib/util.ts`);
+		expect(step1).toContain(path.join(tgtCwd, "lib", "util.ts"));
 
 		const exec1 = blobLatin1(tgtDb, "executor_metadata", "data");
 		expect(exec1).toContain(tgtUser); // /Users/alice -> tgtUser
@@ -116,6 +119,29 @@ describe("Antigravity bundle → unbundle round-trip", () => {
 			"utf-8",
 		);
 		expect(brain).not.toContain("/Users/alice");
-		expect(brain).toContain(`${tgtCwd}/main.ts`);
+		expect(JSON.parse(brain.trim()).content).toContain(path.join(tgtCwd, "main.ts"));
+	});
+
+	it("workspaceFromBlob extracts a Windows file:// path without a spurious leading slash", () => {
+		const wtmp = fs.mkdtempSync(path.join(os.tmpdir(), "agy-ws-"));
+		try {
+			const id = "11111111-2222-3333-4444-555555555555";
+			const conv = path.join(wtmp, "conversations");
+			fs.mkdirSync(conv, { recursive: true });
+			const db = openDb(path.join(conv, `${id}.db`));
+			db.exec("create table trajectory_metadata_blob(id text, data blob)");
+			db.run(
+				"insert into trajectory_metadata_blob(id,data) values('main', ?)",
+				pbString("file:///C:/Users/winuser/proj"),
+			);
+			db.close();
+			// No history.jsonl, so the workspace is recovered from the protobuf blob.
+			const sessions = scanAntigravityLocalSessions(wtmp);
+			expect(sessions).toHaveLength(1);
+			expect(sessions[0].projectPath).toBe("C:/Users/winuser/proj"); // not "/C:/Users/..."
+			expect(sessions[0].projectName).toBe("proj");
+		} finally {
+			fs.rmSync(wtmp, { recursive: true, force: true });
+		}
 	});
 });

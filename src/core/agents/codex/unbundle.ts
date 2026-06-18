@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { UnbundleOptions, UnbundleResult } from "../../../shared/types";
-import { detectHomeDir, rewritePaths } from "../../paths";
+import { detectHomeDir, rewritePathValue, rewritePaths } from "../../paths";
 import { type Db, openDb } from "../../sqlite";
 import { codexDirDefault } from "./local";
 
@@ -71,15 +71,22 @@ export function unbundleCodexSession(args: CodexUnbundleArgs): UnbundleResult {
 	} else {
 		targetUserDir = options.targetUserDir ?? os.homedir();
 		targetCodexHome = options.codexDir ?? path.join(targetUserDir, ".codex");
-		targetCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+		targetCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
 	}
 
-	const rewrittenSourceCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
-	const rewrite = (content: string): string => {
+	const rewrittenSourceCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
+	const rewriteContent = (content: string, jsonEscaped: boolean): string => {
 		let r = content;
-		if (sourceUserDir !== targetUserDir) r = rewritePaths(r, sourceUserDir, targetUserDir);
-		if (rewrittenSourceCwd !== targetCwd) r = rewritePaths(r, rewrittenSourceCwd, targetCwd);
+		if (sourceUserDir !== targetUserDir) r = rewritePaths(r, sourceUserDir, targetUserDir, { jsonEscaped });
+		if (rewrittenSourceCwd !== targetCwd) r = rewritePaths(r, rewrittenSourceCwd, targetCwd, { jsonEscaped });
 		return r;
+	};
+	// A SQLite string value: rewrite JSON-document values (e.g. sandbox_policy,
+	// writable_roots) as escaped so they stay valid JSON; plain scalar paths (cwd,
+	// rollout_path) as raw single-separator.
+	const rewriteValue = (v: string): string => {
+		const t = v.trimStart();
+		return rewriteContent(v, t.startsWith("{") || t.startsWith("["));
 	};
 
 	// 1. Write the rollout transcript at its target location, paths rewritten.
@@ -89,7 +96,7 @@ export function unbundleCodexSession(args: CodexUnbundleArgs): UnbundleResult {
 	const rolloutPath = path.join(targetCodexHome, rolloutRel);
 	fs.mkdirSync(path.dirname(rolloutPath), { recursive: true });
 	const sourceJsonl = fs.readFileSync(path.join(stagingDir, "session.jsonl"), "utf-8");
-	fs.writeFileSync(rolloutPath, rewrite(sourceJsonl));
+	fs.writeFileSync(rolloutPath, rewriteContent(sourceJsonl, true));
 
 	// 2. Update Codex's local thread inventory (state_5.sqlite) if present.
 	let codexStateApplied = false;
@@ -106,7 +113,7 @@ export function unbundleCodexSession(args: CodexUnbundleArgs): UnbundleResult {
 		// machine-specific fields to the target.
 		const base: Record<string, unknown> = {};
 		for (const [k, v] of Object.entries(state.threadRow ?? {})) {
-			base[k] = typeof v === "string" ? rewrite(v) : v;
+			base[k] = typeof v === "string" ? rewriteValue(v) : v;
 		}
 		const values: Record<string, unknown> = {
 			source: "cli",

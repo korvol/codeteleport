@@ -55,6 +55,10 @@ function workspaceFromBlob(dbPath: string): string {
 			let p = m[1];
 			const bad = p.search(/[^\x20-\x7e]/);
 			if (bad !== -1) p = p.slice(0, bad);
+			// file:///C:/Users/x captures "/C:/Users/x" — drop the URI's leading slash(es)
+			// before a Windows drive so the result is a real path ("C:/Users/x"), not "/C:/…".
+			p = p.replace(/^\/+([A-Za-z]:)/, "$1");
+			if (/^[A-Za-z]:/.test(p) || p.startsWith("\\\\")) return p; // Windows drive / UNC — leave as-is
 			if (p.startsWith("//")) p = p.slice(2);
 			return p.startsWith("/") ? p : `/${p}`;
 		} finally {

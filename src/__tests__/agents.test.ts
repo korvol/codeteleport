@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getAgent, getDefaultAgent, getSupportedAgents } from "../shared/agents";
 
@@ -51,9 +52,9 @@ describe("Agent Registry", () => {
 	});
 
 	describe("AgentConfig fields", () => {
-		it("sessionDir is an absolute path pattern", () => {
+		it("sessionDir is an absolute path", () => {
 			const agent = getAgent("claude-code");
-			expect(agent.sessionDir).toMatch(/^\//);
+			expect(path.isAbsolute(agent.sessionDir)).toBe(true);
 		});
 
 		it("resumeCommand is a valid command string", () => {

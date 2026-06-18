@@ -4,9 +4,10 @@ import path from "node:path";
 import type { LocalSession } from "../../local";
 import { scanCodexSession } from "./scanner";
 
-/** Default Codex home (~/.codex), overridable for tests. */
+/** Default Codex home: CODEX_HOME if set (official Codex behavior), else ~/.codex. */
 export function codexDirDefault(): string {
-	return path.join(os.homedir(), ".codex");
+	const fromEnv = process.env.CODEX_HOME?.trim();
+	return fromEnv ? fromEnv : path.join(os.homedir(), ".codex");
 }
 
 function walkRollouts(sessionsDir: string): string[] {

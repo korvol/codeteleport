@@ -62,7 +62,8 @@ describe("Antigravity dispatch via public API", () => {
 			vdb.close();
 			const blob = Buffer.from(row?.data as Buffer).toString("latin1");
 			expect(blob).not.toContain("/Users/alice");
-			expect(blob).toContain(`${tgtUser}/app/x.ts`);
+			// file:// URIs stay forward-slash on every OS.
+			expect(blob).toContain(`file://${tgtUser.replace(/\\/g, "/")}/app/x.ts`);
 		} finally {
 			fs.rmSync(tmp, { recursive: true, force: true });
 		}

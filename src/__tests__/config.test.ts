@@ -61,9 +61,15 @@ describe("Config", () => {
 				configDir,
 			);
 
-			const stats = fs.statSync(configFile);
-			const mode = (stats.mode & 0o777).toString(8);
-			expect(mode).toBe("600");
+			// Windows uses ACLs rather than POSIX mode bits — Node can't represent 0o600
+			// there (statSync reports 0o666), so only assert the bits where they're real.
+			if (process.platform === "win32") {
+				expect(fs.existsSync(configFile)).toBe(true);
+			} else {
+				const stats = fs.statSync(configFile);
+				const mode = (stats.mode & 0o777).toString(8);
+				expect(mode).toBe("600");
+			}
 		});
 
 		it("overwrites existing config", () => {

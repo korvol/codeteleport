@@ -1,4 +1,5 @@
 import type { SessionListItem } from "../client/api";
+import { pathBasename } from "../core/paths";
 
 export interface PickedCloudSession {
 	sessionId: string;
@@ -52,7 +53,7 @@ function formatSize(bytes: number): string {
  */
 export function formatCloudSessionRow(index: number, session: SessionListItem): string {
 	const id = session.id.slice(0, 8);
-	const project = session.metadata?.projectName || session.sourceCwd.split("/").pop() || "unknown";
+	const project = session.metadata?.projectName || pathBasename(session.sourceCwd) || "unknown";
 	const machine = session.sourceMachine || "unknown";
 	// Which agent created this session (legacy bundles with no agentId are claude-code).
 	const agent = session.metadata?.agentId || "claude-code";

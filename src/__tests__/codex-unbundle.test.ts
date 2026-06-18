@@ -94,7 +94,7 @@ describe("unbundleCodexSession", () => {
 			options: { bundlePath: "", targetUserDir: tgtUser, codexDir: tgtCodex },
 		});
 
-		const tgtCwd = `${tgtUser}/workspace/app`;
+		const tgtCwd = path.join(tgtUser, "workspace", "app");
 		expect(result.resumeCommand).toContain(`codex resume ${SESSION_ID}`);
 
 		// Transcript restored under the target codex home, paths rewritten.
@@ -102,7 +102,8 @@ describe("unbundleCodexSession", () => {
 		expect(fs.existsSync(rolloutPath)).toBe(true);
 		const content = fs.readFileSync(rolloutPath, "utf-8");
 		expect(content).not.toContain("/Users/alice");
-		expect(content).toContain(`${tgtCwd}/x.ts`);
+		// Rollout JSONL is JSON-escaped; normalize separators to compare cross-OS.
+		expect(content.replace(/\\\\/g, "/")).toContain(`${tgtCwd.replace(/\\/g, "/")}/x.ts`);
 
 		// threads row upserted with target cwd + target rollout path, only existing cols.
 		const db = openDb(path.join(tgtCodex, "state_5.sqlite"), { readOnly: true });

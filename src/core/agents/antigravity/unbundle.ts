@@ -2,10 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { UnbundleOptions, UnbundleResult } from "../../../shared/types";
-import { detectHomeDir, rewritePaths } from "../../paths";
+import { detectHomeDir, rewritePathValue, rewritePaths } from "../../paths";
 import { type Db, openDb } from "../../sqlite";
 import { antigravityDirDefault } from "./local";
-import { rewriteProtobuf } from "./protobuf";
+import { rewritePathLeaf, rewriteProtobuf } from "./protobuf";
 
 export interface AntigravityUnbundleArgs {
 	stagingDir: string;
@@ -23,7 +23,8 @@ function rewriteBlob(buf: Buffer, from: string, to: string): Buffer {
 		return rewriteProtobuf(buf, from, to);
 	} catch {
 		const s = buf.toString("latin1");
-		return s.includes(from) ? Buffer.from(s.split(from).join(to), "latin1") : buf;
+		const out = rewritePathLeaf(s, from, to);
+		return out === s ? buf : Buffer.from(out, "latin1");
 	}
 }
 
@@ -66,15 +67,18 @@ function rewriteAllBlobs(dbPath: string, apply: (buf: Buffer) => Buffer): void {
 	}
 }
 
-function copyTreeRewritingText(src: string, dst: string, rewrite: (s: string) => string): void {
+const JSON_EXTS = new Set([".jsonl", ".json"]);
+
+function copyTreeRewritingText(src: string, dst: string, rewrite: (s: string, jsonEscaped: boolean) => string): void {
 	for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
 		const s = path.join(src, entry.name);
 		const d = path.join(dst, entry.name);
+		const ext = path.extname(entry.name).toLowerCase();
 		if (entry.isDirectory()) {
 			fs.mkdirSync(d, { recursive: true });
 			copyTreeRewritingText(s, d, rewrite);
-		} else if (TEXT_EXTS.has(path.extname(entry.name).toLowerCase())) {
-			fs.writeFileSync(d, rewrite(fs.readFileSync(s, "utf-8")));
+		} else if (TEXT_EXTS.has(ext)) {
+			fs.writeFileSync(d, rewrite(fs.readFileSync(s, "utf-8"), JSON_EXTS.has(ext)));
 		} else {
 			fs.copyFileSync(s, d);
 		}
@@ -101,14 +105,14 @@ export function unbundleAntigravitySession(args: AntigravityUnbundleArgs): Unbun
 	} else {
 		targetUserDir = options.targetUserDir ?? os.homedir();
 		targetGeminiHome = options.geminiDir ?? defaultHome(targetUserDir);
-		targetCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+		targetCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
 	}
 
-	const rewrittenSourceCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
-	const rewriteText = (content: string): string => {
+	const rewrittenSourceCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
+	const rewriteText = (content: string, jsonEscaped: boolean): string => {
 		let r = content;
-		if (sourceUserDir !== targetUserDir) r = rewritePaths(r, sourceUserDir, targetUserDir);
-		if (rewrittenSourceCwd !== targetCwd) r = rewritePaths(r, rewrittenSourceCwd, targetCwd);
+		if (sourceUserDir !== targetUserDir) r = rewritePaths(r, sourceUserDir, targetUserDir, { jsonEscaped });
+		if (rewrittenSourceCwd !== targetCwd) r = rewritePaths(r, rewrittenSourceCwd, targetCwd, { jsonEscaped });
 		return r;
 	};
 	const rewriteBytes = (buf: Buffer): Buffer => {

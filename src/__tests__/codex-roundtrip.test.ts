@@ -75,10 +75,11 @@ describe("Codex round-trip via public dispatchers", () => {
 		expect(result.resumeCommand).toContain(`codex resume ${SESSION_ID}`);
 		expect(result.codexStateApplied).toBe(true);
 
-		const tgtCwd = `${tgtUser}/workspace/app`;
+		const tgtCwd = path.join(tgtUser, "workspace", "app");
 		const rollout = fs.readFileSync(result.installedTo, "utf-8");
 		expect(rollout).not.toContain("/Users/alice");
-		expect(rollout).toContain(`${tgtCwd}/main.ts`);
+		// Rollout JSONL is JSON-escaped; normalize separators to compare cross-OS.
+		expect(rollout.replace(/\\\\/g, "/")).toContain(`${tgtCwd.replace(/\\/g, "/")}/main.ts`);
 
 		const db = openDb(path.join(tgtCodex, "state_5.sqlite"), { readOnly: true });
 		const row = db.get<Record<string, unknown>>("select * from threads where id=?", SESSION_ID);

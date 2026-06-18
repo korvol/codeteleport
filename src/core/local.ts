@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CLAUDE_DIR } from "../shared/constants";
-import { encodePath } from "./paths";
+import { encodePath, pathBasename } from "./paths";
 
 export interface LocalSession {
 	sessionId: string;
@@ -69,12 +69,16 @@ function scanDirectory(projectsDir: string, encodedFilter?: string): LocalSessio
 				}
 			}
 
-			// Fall back to decoding directory name if cwd not found in JSONL
+			// Fall back to decoding directory name if cwd not found in JSONL. This is
+			// display-only and lossy (encodePath is irreversible: "-" may have been a
+			// separator, a drive colon, or a literal hyphen) — the in-JSONL cwd above is
+			// the real source. The last "-" segment is still a usable project name.
 			if (!projectPath) {
 				projectPath = encodedCwd.replace(/-/g, "/");
 			}
 
-			const projectName = path.basename(projectPath);
+			// pathBasename understands both separators, so a foreign-OS cwd still resolves.
+			const projectName = pathBasename(projectPath);
 
 			sessions.push({
 				sessionId,

@@ -90,15 +90,19 @@ describe("unbundleSession", () => {
 		expect(result.sessionId).toBe(sessionId);
 		expect(result.resumeCommand).toBe(`claude --resume ${sessionId}`);
 
-		// Read the installed JSONL and verify paths were rewritten
-		const targetCwd = sourceCwd.replace(sourceUserDir, path.join(tmpDir, "target-home"));
-		const encodedCwd = targetCwd.replace(/\//g, "-");
-		const installedJsonl = path.join(targetClaudeDir, "projects", encodedCwd, `${sessionId}.jsonl`);
+		// Read the installed JSONL and verify paths were rewritten to the target machine.
+		const targetHome = path.join(tmpDir, "target-home");
+		const targetCwd = path.join(targetHome, "myproject");
+		const installedJsonl = path.join(targetClaudeDir, "projects", encodePath(targetCwd), `${sessionId}.jsonl`);
 		expect(fs.existsSync(installedJsonl)).toBe(true);
 
 		const content = fs.readFileSync(installedJsonl, "utf-8");
 		expect(content).not.toContain("/Users/alice");
-		expect(content).toContain(path.join(tmpDir, "target-home"));
+		// Assert on the decoded path values (host-native), not raw bytes — Windows JSONL
+		// is backslash-escaped, so a raw substring check wouldn't be portable.
+		const lines = content.trim().split("\n");
+		expect(JSON.parse(lines[0]).cwd).toBe(targetCwd);
+		expect(JSON.parse(lines[1]).message.content).toContain(path.join(targetCwd, "foo.ts"));
 	});
 
 	it("rewrites paths in subagent JSONL files", async () => {
@@ -108,9 +112,15 @@ describe("unbundleSession", () => {
 			claudeDir: targetClaudeDir,
 		});
 
-		const targetCwd = sourceCwd.replace(sourceUserDir, path.join(tmpDir, "target-home"));
-		const encodedCwd = targetCwd.replace(/\//g, "-");
-		const subagentJsonl = path.join(targetClaudeDir, "projects", encodedCwd, sessionId, "subagents", "agent.jsonl");
+		const targetCwd = path.join(tmpDir, "target-home", "myproject");
+		const subagentJsonl = path.join(
+			targetClaudeDir,
+			"projects",
+			encodePath(targetCwd),
+			sessionId,
+			"subagents",
+			"agent.jsonl",
+		);
 		expect(fs.existsSync(subagentJsonl)).toBe(true);
 
 		const content = fs.readFileSync(subagentJsonl, "utf-8");
@@ -315,26 +325,29 @@ describe("installMemory (Part A)", () => {
 });
 
 describe("isRestoreTargetSafe (Part B restore safety)", () => {
-	const home = "/Users/bob";
-	const roots = ["/Users/bob/app", "/Users/bob/.claude", "/tmp", "/private/tmp", os.tmpdir()];
+	// Built from a host-native base so path.resolve() doesn't inject a drive letter on Windows.
+	const home = path.join(os.tmpdir(), "rb-home");
+	const app = path.join(home, "app");
+	const roots = [app, path.join(home, ".claude"), os.tmpdir()];
+	const fsRoot = path.parse(home).root;
 
 	it("allows targets under the project cwd or temp roots", () => {
-		expect(isRestoreTargetSafe("/Users/bob/app/notes/x.txt", roots, home)).toBe(true);
-		expect(isRestoreTargetSafe("/tmp/data.json", roots, home)).toBe(true);
+		expect(isRestoreTargetSafe(path.join(app, "notes", "x.txt"), roots, home)).toBe(true);
+		expect(isRestoreTargetSafe(path.join(os.tmpdir(), "data.json"), roots, home)).toBe(true);
 	});
 
 	it("rejects targets outside all allowed roots", () => {
-		expect(isRestoreTargetSafe("/etc/cron.d/evil", roots, home)).toBe(false);
-		expect(isRestoreTargetSafe("/Users/other/proj/x", roots, home)).toBe(false);
+		expect(isRestoreTargetSafe(path.join(fsRoot, "etc", "cron.d", "evil"), roots, home)).toBe(false);
+		expect(isRestoreTargetSafe(path.join(fsRoot, "somewhere-else", "proj", "x"), roots, home)).toBe(false);
 	});
 
 	it("rejects path traversal that escapes an allowed root", () => {
-		expect(isRestoreTargetSafe("/Users/bob/app/../../../etc/x", roots, home)).toBe(false);
+		expect(isRestoreTargetSafe(path.join(app, "..", "..", "..", "etc", "x"), roots, home)).toBe(false);
 	});
 
 	it("rejects sensitive targets even under an allowed root", () => {
-		expect(isRestoreTargetSafe("/tmp/.env", roots, home)).toBe(false);
-		expect(isRestoreTargetSafe("/Users/bob/app/server.pem", roots, home)).toBe(false);
+		expect(isRestoreTargetSafe(path.join(os.tmpdir(), ".env"), roots, home)).toBe(false);
+		expect(isRestoreTargetSafe(path.join(app, "server.pem"), roots, home)).toBe(false);
 	});
 });
 
@@ -356,7 +369,10 @@ describe("unbundleSession — anchors repeated home dir in cwd (Part B)", () => 
 
 			const result = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
 
-			const expectedCwd = sCwd.split(sUser).join(targetHome); // all occurrences
+			// Only the anchored home PREFIX is relocated; a deeper segment that coincidentally
+			// repeats the home string is left in place (a home/drive root can't be spliced
+			// into the middle of a path). Separators are translated to the target's native style.
+			const expectedCwd = path.join(targetHome, "work", "Users", "alice", "app");
 			expect(result.installedTo).toBe(path.join(targetClaude, "projects", encodePath(expectedCwd)));
 		} finally {
 			fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -393,11 +409,11 @@ describe("unbundleSession — project memory restore (Part A)", () => {
 
 		const result = await unbundleSession({ bundlePath, targetUserDir: targetHome, claudeDir: targetClaude });
 
-		const targetCwd = sourceCwd.replace(sourceUserDir, targetHome);
-		const memDir = path.join(targetClaude, "projects", targetCwd.replace(/\//g, "-"), "memory");
+		const targetCwd = path.join(targetHome, "app");
+		const memDir = path.join(targetClaude, "projects", encodePath(targetCwd), "memory");
 		expect(fs.existsSync(path.join(memDir, "MEMORY.md"))).toBe(true);
 		const mc = fs.readFileSync(path.join(memDir, "MEMORY.md"), "utf-8");
-		expect(mc).toContain(`${targetCwd}/x.md`);
+		expect(mc).toContain(path.join(targetCwd, "x.md"));
 		expect(mc).not.toContain("/Users/alice");
 		expect(result.memoryInstalled?.written).toContain("MEMORY.md");
 	});

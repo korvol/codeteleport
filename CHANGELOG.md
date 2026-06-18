@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 (2026-06-18)
+
+- **Cross-OS teleport (Windows ⇄ macOS/Linux)** — sessions now teleport between operating systems, not just between machines running the same OS. On `pull`, absolute paths embedded in a session are translated to the target machine's style: a Windows session (`C:\Users\alice\proj`) restores with POSIX paths on macOS/Linux, and a macOS/Linux session restores with native, properly-escaped Windows paths on Windows. Path matching is separator-aware (it handles `/`, `\`, and JSON-escaped `\\`) and JSON-safe (escape sequences like `\n` are never corrupted). Works for Claude Code, Codex, and Antigravity (whose `file://` workspace URIs stay forward-slash on every OS). Project directories are encoded the way each platform's agent expects — the Windows drive colon and backslashes both map to `-` — so `claude --resume` / `codex resume` find the restored session.
+- **`CODEX_HOME` respected** — Codex session discovery now honors the `CODEX_HOME` environment variable (falling back to `~/.codex`), matching Codex's own behavior.
+- **Windows sensitive-path safety** — the secrets deny-list (`~/.ssh`, `~/.aws`, `~/.config`, `~/.gnupg`) now matches case-insensitively on Windows, so a differently-cased secret directory is never bundled or restored.
+- A cross-OS project located outside the home directory (e.g. on a different Windows drive) needs `--target-dir` to anchor it on the target machine.
+
 ## 0.6.0 (2026-06-18)
 
 - **Convert to Antigravity** — `codeteleport pull <id> --as antigravity` (and the `teleport_pull` MCP `as` option) now converts a pulled session into an Antigravity conversation, completing the conversion matrix: **any agent converts to any other** (Claude Code, Codex, and Antigravity, in every direction). Antigravity's session is a protobuf-backed SQLite database, which the converter synthesizes from the transcript. As with all conversions this is transcript-level: your prompts and the agent's replies carry over, but file history, exact tool-call fidelity, and agent-specific sidecar state do not (the original tool steps and per-call metadata are not reconstructed). Pulling without `--as` still restores natively with full fidelity.

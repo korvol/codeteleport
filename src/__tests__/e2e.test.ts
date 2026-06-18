@@ -245,7 +245,7 @@ describe("E2E: Full teleport flow with mock server", () => {
 		// VERIFY: Paths rewritten correctly
 		// ══════════════════════════════════════════════
 
-		const targetCwd = sourceCwd.replace(sourceUserDir, machineB.home);
+		const targetCwd = path.join(machineB.home, "projects", "code-teleport");
 		const targetEncodedCwd = encodePath(targetCwd);
 		const targetProjDir = path.join(machineB.claude, "projects", targetEncodedCwd);
 
@@ -255,22 +255,19 @@ describe("E2E: Full teleport flow with mock server", () => {
 
 		const jsonlContent = fs.readFileSync(jsonlPath, "utf-8");
 		expect(jsonlContent).not.toContain("/Users/alice");
-		expect(jsonlContent).toContain(machineB.home);
 
-		// Verify individual JSONL entries
+		// Verify individual JSONL entries via decoded values (host-native paths).
 		const lines = jsonlContent.trim().split("\n");
 		expect(lines).toHaveLength(6);
 
 		const firstMsg = JSON.parse(lines[0]);
-		expect(firstMsg.cwd).toBe(`${machineB.home}/projects/code-teleport`);
+		expect(firstMsg.cwd).toBe(targetCwd);
 
 		const editMsg = JSON.parse(lines[1]);
-		expect(editMsg.toolCalls[0].input.file_path).toBe(
-			`${machineB.home}/projects/code-teleport/packages/api/src/index.ts`,
-		);
+		expect(editMsg.toolCalls[0].input.file_path).toBe(path.join(targetCwd, "packages", "api", "src", "index.ts"));
 
 		const lastMsg = JSON.parse(lines[5]);
-		expect(lastMsg.cwd).toBe(`${machineB.home}/projects/code-teleport`);
+		expect(lastMsg.cwd).toBe(targetCwd);
 
 		// ══════════════════════════════════════════════
 		// VERIFY: Subagent paths rewritten
@@ -280,7 +277,7 @@ describe("E2E: Full teleport flow with mock server", () => {
 		expect(fs.existsSync(subagentPath)).toBe(true);
 		const subContent = fs.readFileSync(subagentPath, "utf-8");
 		expect(subContent).not.toContain("/Users/alice");
-		expect(subContent).toContain(machineB.home);
+		expect(JSON.parse(subContent.trim()).cwd).toBe(targetCwd);
 
 		// ══════════════════════════════════════════════
 		// VERIFY: All assets transferred
@@ -369,23 +366,23 @@ describe("E2E: Full teleport flow with mock server", () => {
 		// 2. All paths point to the targetDir
 		const jsonlContent = fs.readFileSync(jsonlPath, "utf-8");
 		expect(jsonlContent).not.toContain("/Users/alice");
-		expect(jsonlContent).toContain(`${machineB.home}/work/my-teleport`);
 
-		// Verify a tool call path was fully rewritten
+		// targetDir is anchored on the (host-native) target machine; assert decoded values.
+		const targetCwd = path.join(machineB.home, "work", "my-teleport");
 		const lines = jsonlContent.trim().split("\n");
 		const editMsg = JSON.parse(lines[1]);
-		expect(editMsg.toolCalls[0].input.file_path).toBe(`${machineB.home}/work/my-teleport/packages/api/src/index.ts`);
+		expect(editMsg.toolCalls[0].input.file_path).toBe(path.join(targetCwd, "packages", "api", "src", "index.ts"));
 
 		// CWD should point to targetDir, not the original
 		const firstMsg = JSON.parse(lines[0]);
-		expect(firstMsg.cwd).toBe(`${machineB.home}/work/my-teleport`);
+		expect(firstMsg.cwd).toBe(targetCwd);
 
 		// Subagent should also be rewritten
 		const subagentPath = path.join(targetProjDir, sessionId, "subagents", "explore-001.jsonl");
 		expect(fs.existsSync(subagentPath)).toBe(true);
 		const subContent = fs.readFileSync(subagentPath, "utf-8");
 		expect(subContent).not.toContain("/Users/alice");
-		expect(subContent).toContain(`${machineB.home}/work/my-teleport`);
+		expect(JSON.parse(subContent.trim()).cwd).toBe(targetCwd);
 
 		// Assets still installed correctly
 		expect(fs.existsSync(path.join(machineB.claude, "file-history", sessionId))).toBe(true);

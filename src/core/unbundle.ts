@@ -8,7 +8,15 @@ import type { UnbundleOptions, UnbundleResult } from "../shared/types";
 import { unbundleAntigravitySession } from "./agents/antigravity/unbundle";
 import { unbundleCodexSession } from "./agents/codex/unbundle";
 import { convertInStaging } from "./conversion/convert";
-import { detectHomeDir, encodePath, isSensitivePath, isUnder, rewritePaths, safeRealpath } from "./paths";
+import {
+	detectHomeDir,
+	encodePath,
+	isSensitivePath,
+	isUnder,
+	rewritePathValue,
+	rewritePaths,
+	safeRealpath,
+} from "./paths";
 
 export async function unbundleSession(options: UnbundleOptions): Promise<UnbundleResult> {
 	const { bundlePath } = options;
@@ -36,7 +44,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// convertTo equals the bundle's own agent.
 		if (options.convertTo && options.convertTo !== agentId) {
 			const targetUserDir = options.targetUserDir ?? os.homedir();
-			const targetCwd = options.targetDir ?? rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+			const targetCwd = options.targetDir ?? rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
 			return convertInStaging({
 				sourceAgentId: agentId,
 				targetAgentId: options.convertTo,
@@ -81,10 +89,13 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 			targetClaudeDir = options.claudeDir ?? path.join(targetUserDir, ".claude");
 			targetCwd = targetDir;
 		} else {
-			// Simple mode: just swap user dir
+			// Simple mode: just swap user dir. This assumes the project sits under the
+			// home dir (the common case). A cross-OS project located OUTSIDE the home dir
+			// (e.g. a different Windows drive like D:\…) has no sensible target location,
+			// so rewritePathValue leaves it unchanged — pass --target-dir to anchor it.
 			targetUserDir = options.targetUserDir ?? os.homedir();
 			targetClaudeDir = options.claudeDir ?? path.join(targetUserDir, ".claude");
-			targetCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+			targetCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
 		}
 
 		const targetCwdEncoded = encodePath(targetCwd);
@@ -95,30 +106,44 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		// Two-pass path rewriting (matches scripts/unpack.sh):
 		// Pass 1: Replace sourceUserDir → targetUserDir (handles cross-user paths)
 		// Pass 2: Replace rewritten sourceCwd → targetCwd (handles project directory anchoring)
-		// Use rewritePaths (all occurrences) so the anchor matches what pass 1 produces.
-		const rewrittenSourceCwd = rewritePaths(sourceCwd, sourceUserDir, targetUserDir);
+		// Use the same prefix-anchored rewrite so the cwd anchor matches what pass 1 produces.
+		const rewrittenSourceCwd = rewritePathValue(sourceCwd, sourceUserDir, targetUserDir);
 
-		function twoPassRewrite(content: string): string {
-			let result = content;
-			if (sourceUserDir !== targetUserDir) {
-				result = rewritePaths(result, sourceUserDir, targetUserDir);
-			}
-			if (rewrittenSourceCwd !== targetCwd) {
-				result = rewritePaths(result, rewrittenSourceCwd, targetCwd);
-			}
-			return result;
+		// Content rewriter. JSONL transcripts are jsonEscaped; Markdown/raw text is not.
+		// Two passes: home dir → target home, then rewritten cwd → target cwd (project anchoring).
+		function makeContentRewrite(jsonEscaped: boolean): (content: string) => string {
+			return (content: string): string => {
+				let result = content;
+				if (sourceUserDir !== targetUserDir) {
+					result = rewritePaths(result, sourceUserDir, targetUserDir, { jsonEscaped });
+				}
+				if (rewrittenSourceCwd !== targetCwd) {
+					result = rewritePaths(result, rewrittenSourceCwd, targetCwd, { jsonEscaped });
+				}
+				return result;
+			};
+		}
+		const jsonlRewrite = makeContentRewrite(true);
+		const rawRewrite = makeContentRewrite(false);
+
+		// Path-value rewriter for restore target paths (single native paths, not content).
+		function twoPassValue(p: string): string {
+			let r = p;
+			if (sourceUserDir !== targetUserDir) r = rewritePathValue(r, sourceUserDir, targetUserDir);
+			if (rewrittenSourceCwd !== targetCwd) r = rewritePathValue(r, rewrittenSourceCwd, targetCwd);
+			return r;
 		}
 
 		// 1. Install session JSONL with two-pass path rewriting
 		const jsonlContent = fs.readFileSync(path.join(stagingDir, "session.jsonl"), "utf-8");
-		fs.writeFileSync(path.join(targetProjDir, `${sessionId}.jsonl`), twoPassRewrite(jsonlContent));
+		fs.writeFileSync(path.join(targetProjDir, `${sessionId}.jsonl`), jsonlRewrite(jsonlContent));
 
 		// 2. Install session subdirectory with path rewriting in JSONL files
 		const sessionSubdir = path.join(stagingDir, "session-subdir");
 		if (fs.existsSync(sessionSubdir)) {
 			const targetSubdir = path.join(targetProjDir, sessionId);
 			fs.cpSync(sessionSubdir, targetSubdir, { recursive: true });
-			rewriteJsonlFilesInDir(targetSubdir, twoPassRewrite);
+			rewriteJsonlFilesInDir(targetSubdir, jsonlRewrite);
 		}
 
 		// 3. Install file-history
@@ -163,7 +188,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 		if (fs.existsSync(memorySrc)) {
 			const memoryDst = path.join(targetProjDir, "memory");
 			fs.mkdirSync(memoryDst, { recursive: true });
-			memoryInstalled = installMemory(memorySrc, memoryDst, twoPassRewrite, options.memoryConflict ?? "merge");
+			memoryInstalled = installMemory(memorySrc, memoryDst, rawRewrite, options.memoryConflict ?? "merge");
 		}
 
 		// 8. Install extra working/temp files (Part B) at their rewritten target paths
@@ -176,8 +201,10 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 			const encodedSourceCwd = encodePath(sourceCwd);
 			const encodedTargetCwd = encodePath(targetCwd);
 			// Allowed restore roots (literal + realpath): target cwd/.claude subtrees and temp roots.
+			// On Windows, /tmp and /private/tmp resolve to real writable C:\tmp etc., so gate them out.
+			const tempRoots = process.platform === "win32" ? [os.tmpdir()] : [os.tmpdir(), "/tmp", "/private/tmp"];
 			const restoreRoots = Array.from(
-				new Set([targetCwd, targetClaudeDir, os.tmpdir(), "/tmp", "/private/tmp"].flatMap((r) => [r, safeRealpath(r)])),
+				new Set([targetCwd, targetClaudeDir, ...tempRoots].flatMap((r) => [r, safeRealpath(r)])),
 			);
 			const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")) as Array<{
 				stored: string;
@@ -188,9 +215,9 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 			for (const entry of manifest) {
 				const storedPath = path.join(stagingDir, "extra-files", entry.stored);
 				if (!fs.existsSync(storedPath)) continue;
-				let targetPath = twoPassRewrite(entry.originalPath);
+				let targetPath = twoPassValue(entry.originalPath);
 				if (encodedSourceCwd !== encodedTargetCwd) {
-					targetPath = rewritePaths(targetPath, encodedSourceCwd, encodedTargetCwd);
+					targetPath = rewritePaths(targetPath, encodedSourceCwd, encodedTargetCwd, { jsonEscaped: false });
 				}
 				// Refuse to write outside the allowed roots or to a sensitive location (untrusted manifest).
 				if (!isRestoreTargetSafe(targetPath, restoreRoots, targetUserDir)) {
@@ -204,7 +231,7 @@ export async function unbundleSession(options: UnbundleOptions): Promise<Unbundl
 				}
 				fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 				if (entry.rewriteContent) {
-					fs.writeFileSync(targetPath, twoPassRewrite(fs.readFileSync(storedPath, "utf-8")));
+					fs.writeFileSync(targetPath, rawRewrite(fs.readFileSync(storedPath, "utf-8")));
 				} else {
 					fs.copyFileSync(storedPath, targetPath);
 				}
