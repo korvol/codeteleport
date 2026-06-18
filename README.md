@@ -6,7 +6,7 @@ Push a conversation from one machine, pull it on another, resume right where you
 
 [![npm version](https://img.shields.io/npm/v/codeteleport?color=10b981&label=npm)](https://www.npmjs.com/package/codeteleport)
 [![License: MIT](https://img.shields.io/badge/license-MIT-10b981)](https://github.com/korvol/codeteleport/blob/main/LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-10b981)](https://docs.codeteleport.com/getting-started/installation/)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-10b981)](https://docs.codeteleport.com/getting-started/installation/)
 [![Docs](https://img.shields.io/badge/docs-docs.codeteleport.com-10b981)](https://docs.codeteleport.com)
 
 ---
@@ -245,7 +245,7 @@ The CLI and MCP server are open source under the MIT license. Cloud sync has a f
 
 ## Requirements
 
-Node.js >= 22.5.0 — the CLI uses the built-in `node:sqlite` module to read and write the Codex and Antigravity session databases. macOS and Linux only.
+Node.js >= 22.5.0 — the CLI uses the built-in `node:sqlite` module to read and write the Codex and Antigravity session databases. Runs on macOS, Linux, and Windows.
 
 ## Platform Support
 
@@ -253,7 +253,7 @@ Node.js >= 22.5.0 — the CLI uses the built-in `node:sqlite` module to read and
 | --- | --- |
 | macOS | Fully supported |
 | Linux | Fully supported |
-| Windows | Not yet (planned) |
+| Windows | Fully supported |
 
 ---
 
