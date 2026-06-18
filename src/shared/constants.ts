@@ -2,7 +2,13 @@ import os from "node:os";
 import path from "node:path";
 
 export const CLAUDE_DIR = path.join(os.homedir(), ".claude");
-export const CONFIG_DIR = path.join(os.homedir(), ".codeteleport");
+
+/**
+ * Config directory. Defaults to ~/.codeteleport, but can be redirected with the
+ * CODETELEPORT_CONFIG_DIR env var so a session (e.g. the e2e harness, or a second
+ * account) runs against an isolated config without touching the real one.
+ */
+export const CONFIG_DIR = process.env.CODETELEPORT_CONFIG_DIR || path.join(os.homedir(), ".codeteleport");
 export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
 export const API_URL = "https://api.codeteleport.com/v1";
