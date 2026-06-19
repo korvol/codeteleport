@@ -193,5 +193,5 @@ async function listCloud(opts: {
 	if (agentFilter) {
 		console.log("\n(showing only your configured agent — use --all for every agent, or --agent <id>)");
 	}
-	console.log("\nPull into another agent's format with: codeteleport pull <id> --as <claude-code|codex>");
+	console.log("\nPull into another agent's format with: codeteleport pull <id> --as <claude-code|codex|antigravity>");
 }
